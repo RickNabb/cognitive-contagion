@@ -8,57 +8,26 @@ from nlogo_colors import *
 import itertools
 import pandas as pd
 import os
+import numpy as np
 
 """
 BELIEF ATTRIBUTES
 """
 
-class Partisanship(Enum):
-    DEMOCRAT = 0
-    INDEPENDENT = 1
-    REPUBLICAN = 2
-
-class Ideology(Enum):
-    VERY_LIBERAL = 0
-    LIBERAL = 1
-    MODERATE = 2
-    CONSERVATIVE = 3
-    VERY_CONSERVATIVE = 4
-
-class ICouldGetVirus(Enum):
-    BELIEVE = 1
-    UNCERTAIN = 0
-    DISBELIEVE = -1
-
-class ICouldSpreadVirus(Enum):
-    BELIEVE = 1
-    UNCERTAIN = 0
-    DISBELIEVE = -1
-
-class VirusIsDangerous(Enum):
-    BELIEVE = 1
-    UNCERTAIN = 0
-    DISBELIEVE = -1
-
-class Fear(Enum):
-    FEARFUL = 1
-    NOT_FEARFUL = 0
-
-class CriticalThinking(Enum):
-    CRITICALLY_THINKING = 1
-    NOT_CRIT_THINKING = 0
+class TestDiscrete(Enum):
+  NT = -3
+  NTW = -2
+  NO = -1
+  Z = 0
+  O = 1
+  TW = 2
+  T = 3
 
 class Attributes(Enum):
-    P = Partisanship
-    I = Ideology
-    VG = ICouldGetVirus
-    VS = ICouldSpreadVirus
-    VD = VirusIsDangerous
-    F = Fear
-    CT = CriticalThinking
+  A = TestDiscrete
 
 def attrs_as_array(attr):
-    return map(lambda a: a.value, list(attr.value))
+  return map(lambda a: a.value, list(attr.value))
 
 """
 STATS STUFF
@@ -97,12 +66,12 @@ def create_discrete_dist_sm(vals):
     return dist
 
 def sample_dist(vals, dist):
-    choice = random() * sum(vals)
-    for i in range(0, len(dist)):
-        val = dist[i]
-        if choice <= val:
-            return i
-    return -1
+  choice = random() * sum(vals)
+  for i in range(0, len(dist)):
+    val = dist[i]
+    if choice <= val:
+      return i
+  return -1
 
 def test_create_dist():
     vals = [27,42,31]
@@ -121,8 +90,8 @@ itself to return the needed dependency.
 its approriate distribution in the empirical data.
 """
 def random_dist_sample(attr, given=None):
-    emp_dist = EmpiricalDistributions[attr.name]
-    emp_vals = EmpiricalValues[attr.name]
+    emp_dist = AttributeDistributions[attr.name]
+    emp_vals = AttributeValues[attr.name]
     vals = []
     dist = []
     if emp_dist['depends_on'] is not None and given is None:
@@ -136,7 +105,7 @@ def random_dist_sample(attr, given=None):
     else:
         vals = emp_vals['vals']
         dist = emp_dist['dist']
-    return sample_dist(vals, dist)
+    return list(attr.value)[sample_dist(vals, dist)].value
 
 def test_random_dist_sample():
     attr = Attributes.I
@@ -152,117 +121,45 @@ Sample an attribute with an equal distribution over the values.
 :param attr: The attribute to sample - e.g. Attributes.I.
 """
 def random_sample(attr):
-    rand = int(math.floor(random() * len(list(attr.value))))
-    val = list(attr.value)[rand]
-    return val.value
+  rand = int(math.floor(random() * len(list(attr.value))))
+  val = list(attr.value)[rand]
+  return val.value
 
 def test_random_sample():
-    print(random_sample(Attributes.VG))
+  print(random_sample(Attributes.VG))
 
 """
 RELEVANT EMPIRICAL DATA
 """
 
-# Ideological distribution values
-# Taken from Harvard Harris polling
-IVals = [6, 19, 37, 29, 8]
-IDist = create_discrete_dist_sm(IVals)
-
-# Partisanship values by ideology
-PIValsVLib = [12,5,1]
-PIValsLib = [39,15,4]
-PIValsMod = [40,46,22]
-PIValsCon = [7,29,55]
-PIValsVCon = [4,6,16]
-PIValsByI = [
-    PIValsVLib,
-    PIValsLib,
-    PIValsMod,
-    PIValsCon,
-    PIValsVCon
-]
-
-# Partisanship distributions given ideology
-# Taken from Harvard Harris polling
-PGivenIDist = [
-    create_discrete_dist_sm(PIValsVLib),
-    create_discrete_dist_sm(PIValsLib),
-    create_discrete_dist_sm(PIValsMod),
-    create_discrete_dist_sm(PIValsCon),
-    create_discrete_dist_sm(PIValsVCon),
-]
-
-EmpiricalValues = {
-    Attributes.I.name: {
-       "vals": IVals,
-        "depends_on": None
-    },
-    Attributes.P.name: {
-        "vals": PIValsByI,
-        "depends_on": Attributes.I
-    }
-}
-
-EmpiricalDistributions = {
-    Attributes.I.name: {
-        "dist": IDist,
-        "depends_on": None
-    },
-    Attributes.P.name: {
-        "dist": PGivenIDist,
-        "depends_on": Attributes.I
-    }
-}
-
-# Homophily values
-# from Bakshy et al. 2015
-I_homophily = [
-  [0.7, 0.5, 0.15, 0.3, 0.1],
-  [0.65, 0.55, 0.5, 0.25, 0.15],
-  [0.3, 0.45, 0.2, 0.5, 0.3],
-  [0.14, 0.22, 0.13, 0.7, 0.6],
-  [0.12, 0.24, 0.13, 0.5, 0.8]
-]
-P_homophily = [
-  [0.6,0.16,0.24],
-  [0.40,0.2,0.4],
-  [0.21,0.14,0.65]
-]
+# Attribute A distribution values
+AVals = [1, 1, 1, 1, 1, 1, 1]
+ADist = create_discrete_dist_sm(AVals)
+AMAGTheta = np.ones((7,7)) * 0.05
 
 # Weighting of attributes
 # TODO: Find some sort of empirical measure to take this from
 attribute_weights = {
-    Attributes.I.name: 1.0,
-    Attributes.P.name: 2.0,
-    Attributes.VG.name: 0.25,
-    Attributes.VD.name: 0.25,
-    Attributes.VS.name: 0.25,
+    Attributes.A.name: 1.0,
 }
 
-fearful_attribute_weights = {
-    Attributes.I.name: 1.0,
-    Attributes.P.name: 3.0,
-    Attributes.VG.name: 0.25,
-    Attributes.VD.name: 0.25,
-    Attributes.VS.name: 0.25,
+AttributeValues = {
+  Attributes.A.name: {
+    "vals": AVals,
+    "depends_on": None
+  }
 }
 
-crit_thinking_attribute_weights = {
-    Attributes.I.name: 1.0,
-    Attributes.P.name: 1.0,
-    Attributes.VG.name: 0.5,
-    Attributes.VD.name: 0.5,
-    Attributes.VS.name: 0.5,
+AttributeDistributions = {
+  Attributes.A.name: {
+    "dist": ADist,
+    "depends_on": None
+  }
 }
 
-"""
-EPIDEMIOLOGICAL STUFF
-"""
-
-baseline_infected_size = 0.05
-incubation_period = 5.01
-infectiousness_duration = 4.6
-r0 = 2.4
+AttributeMAGThetas = {
+  Attributes.A.name: AMAGTheta
+}
 
 '''
 NETLOGO PARSING
@@ -275,7 +172,7 @@ def nlogo_replace_agents(string, types):
     for type in types:
         string = string.replace(f'({type} ', f'{type}_')
     return string.replace(')','')
-  
+
 '''
 Parse a NetLogo mixed dictionary into a Python dictionary. This is a nightmare.
 But it works.

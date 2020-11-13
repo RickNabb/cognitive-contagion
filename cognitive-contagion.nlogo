@@ -6,14 +6,12 @@ globals [
   mag-g
   cur-message-id
   messages-over-time
+  citizen-priors
+  citizen-malleables
 
   ;; SIR
   Nk
   kronecker_g
-  infected-color
-  susceptible-color
-  removed-color
-  infectious-durations
 ]
 
 citizens-own [
@@ -21,14 +19,6 @@ citizens-own [
   brain
   messages-heard
   messages-believed
-
-  ;; SIR
-  susceptible?
-  infected?
-  removed?
-  time-infected
-  num-infected
-  tp
 ]
 
 medias-own [
@@ -42,10 +32,6 @@ breed [ citizens citizen ]
 
 undirected-link-breed [ social-friends social-friend ]
 directed-link-breed [ subscribers subscriber ]
-
-undirected-link-breed [ friends friend ]
-undirected-link-breed [ seeings seeing ]
-
 
 ;;;;;;;;;;;;;;;;;
 ;; SETUP PROCS
@@ -64,10 +50,8 @@ to setup
   py:run "import mag as MAG"
 
   set Nk array_shape seed ^ k
-  set susceptible-color sky
-  set infected-color red
-  set removed-color grey
-  set infectious-durations []
+  set citizen-priors []
+  set citizen-malleables [ "Attributes.A" ]
 
   ask patches [
     set pcolor white
@@ -87,34 +71,10 @@ to setup
 
   set messages-over-time load-messages-over-time messages-data-path
 
-  ifelse SIR-on? [
-    connect_kronecker
-    ask citizens [
-    if (random-float 1) < baseline-infected-size [
-      set infected? true
-    ]
-    if tp? [ adjust-seeings-to-tp ]
-      update-citizen
-    ]
+  let max_turtle max-one-of turtles [ count social-friend-neighbors ]
+  repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
+  ask turtles with [ count social-friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
 
-    ;layout-radial [citizens with subscriber-from (media 0)] (in-subscribers-from media 0) (media 0)
-
-    ask social-friends [
-      give-self-link-ip-color
-      set thickness 0.1
-    ]
-    ask friends [ set color blue ]
-    ask seeings [ set color orange ]
-
-    let max_turtle max-one-of turtles [ count friend-neighbors ]
-    layout-radial turtles friends max_turtle
-    ask turtles with [ count friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
-  ] [
-    let max_turtle max-one-of turtles [ count social-friend-neighbors ]
-    layout-radial turtles social-friends max_turtle
-    ask turtles with [ count social-friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
-    set show-citizen-sir? false
-  ]
   layout
 
   reset-ticks
@@ -126,33 +86,19 @@ to create-agents
 end
 
 to create-citizen-dist [ id ]
-  let i sample-attr-dist "Attributes.I"
-  let p sample-attr-dist-given "Attributes.P" (list "Attributes.I" i)
-  create-citizen id i p
+  let prior-vals (map sample-attr-dist citizen-priors)
+  let malleable-vals (map sample-attr-dist citizen-malleables)
+  create-citizen id prior-vals malleable-vals
 end
 
-to create-citizen [ id i p ]
-  let priors (list-as-py-array [ "Attributes.I" "Attributes.P" ] false)
-  let malleable (list-as-py-array [ "Attributes.VG" "Attributes.VS" "Attributes.VD" ] false)
-  let prior-vals (list-as-py-array (list i p) false)
-  let malleable-vals (list-as-py-array [ 0 0 0 ] false)
-
-  let b create-agent-brain id priors malleable prior-vals malleable-vals
+to create-citizen [ id prior-vals malleable-vals ]
+  let b create-agent-brain id citizen-priors citizen-malleables prior-vals malleable-vals
   create-citizens 1 [
     set brain b
     set messages-heard []
     set messages-believed []
     set size 1
     setxy random-xcor random-ycor
-
-    if SIR-on? [
-      set susceptible? true
-      set infected? false
-      set removed? false
-      set time-infected 0
-      set num-infected 0
-    ]
-    set tp (sum (list (dict-value b "VG") (dict-value b "VS") (dict-value b "VD")))
   ]
 end
 
@@ -165,66 +111,34 @@ to create-citizenz
 end
 
 to create-media
-  ;; For now, create some paradigmatic media companies
-
-  ; Breitbart
+  ; Disbelief
   create-medias 1 [
-    set media-attrs [ ["I" 4] ["P" 2] ]
+    set media-attrs [ ["A" -3] ]
     set cur-message-id 0
     set messages-sent []
     setxy -4 0
     set color red
-    set idee "BT"
+    set idee "DIS"
   ]
 
-  ; FOX
-  create-medias 1 [
-    set media-attrs [ ["I" 3] ["P" 2] ]
-    set cur-message-id 0
-    set messages-sent []
-    setxy -3 0
-    set color red
-    set idee "FOX"
-  ]
+;  ; Uncertainty
+;  create-medias 1 [
+;    set media-attrs [ ["A" 0] ]
+;    set cur-message-id 0
+;    set messages-sent []
+;    setxy -3 0
+;    set color violet
+;    set idee "UNC"
+;  ]
 
-  ; NYT
+  ; Belief
   create-medias 1 [
-    set media-attrs [ ["I" 2] ["P" 0] ]
-    set cur-message-id 0
-    set messages-sent []
-    setxy -4 1
-    set color blue
-    set idee "NYT"
-  ]
-
-  ; Washington Post
-  create-medias 1 [
-    set media-attrs [ ["I" 2] ["P" 1] ]
+    set media-attrs [ ["A" 3] ]
     set cur-message-id 0
     set messages-sent []
     setxy -4 1
     set color blue
-    set idee "WP"
-  ]
-
-  ; CNN
-  create-medias 1 [
-    set media-attrs [ ["I" 1] ["P" 0] ]
-    set cur-message-id 0
-    set messages-sent []
-    setxy -3 1
-    set color blue
-    set idee "CNN"
-  ]
-
-  ; HuffPost
-  create-medias 1 [
-    set media-attrs [ ["I" 0] ["P" 0] ]
-    set cur-message-id 0
-    set messages-sent []
-    setxy -4 2
-    set color blue
-    set idee "HP"
+    set idee "BEL"
   ]
 end
 
@@ -246,66 +160,11 @@ to step
     let media-idee item 0 media-messages
     foreach (item 1 media-messages) [ m ->
       ask medias with [ idee = media-idee] [
-        let vg dict-value m "VG"
-        let vs dict-value m "VS"
-        let vd dict-value m "VD"
-        let i (dict-value ([media-attrs] of self) "I")
-        let p (dict-value ([media-attrs] of self) "P")
+        let a (dict-value m "A")
         repeat message-repeats [
-          send-media-message-to-subscribers self (list (list "I" i) (list "P" p) (list "VG" vg) (list "VS" vs) (list "VD" vd))
+          send-media-message-to-subscribers self (list (list "A" a))
         ]
       ]
-    ]
-  ]
-
-  ;; Breitbart
-;  ask medias with [idee = "BT"] [
-;    let i (dict-value ([media-attrs] of self) "I")
-;    let p (dict-value ([media-attrs] of self) "P")
-;    send-media-message-to-subscribers self (list (list "I" i) (list "P" p) ["VG" -1] ["VS" -1] ["VD" -1])
-;  ]
-
-  ;; FOX
-;  ask medias with [idee = "FOX"] [
-;    let i (dict-value ([media-attrs] of self) "I")
-;    let p (dict-value ([media-attrs] of self) "P")
-;    send-media-message-to-subscribers self (list (list "I" i) (list "P" p) ["VG" -1] ["VS" -1] ["VD" 0])
-;  ]
-
-  ;; NYT
-;  ask medias with [idee = "NYT"] [
-;    let i (dict-value ([media-attrs] of self) "I")
-;    let p (dict-value ([media-attrs] of self) "P")
-;    send-media-message-to-subscribers self (list (list "I" i) (list "P" p) ["VG" 1] ["VS" 1] ["VD" 1])
-;  ]
-
-  ;; Washington Post
-;  ask medias with [idee = "WP"] [
-;    let i (dict-value ([media-attrs] of self) "I")
-;    let p (dict-value ([media-attrs] of self) "P")
-;    send-media-message-to-subscribers self (list (list "I" i) (list "P" p) ["VG" 1] ["VS" 1] ["VD" 1])
-;  ]
-
-  ;; CNN
-;  ask medias with [idee = "CNN"] [
-;    let i (dict-value ([media-attrs] of self) "I")
-;    let p (dict-value ([media-attrs] of self) "P")
-;    send-media-message-to-subscribers self (list (list "I" i) (list "P" p) ["VG" 1] ["VS" 1] ["VD" 1])
-;  ]
-
-  ;; HuffPost
-;  ask medias with [idee = "HP"] [
-;    let i (dict-value ([media-attrs] of self) "I")
-;    let p (dict-value ([media-attrs] of self) "P")
-;    send-media-message-to-subscribers self (list (list "I" i) (list "P" p) ["VG" 1] ["VS" 1] ["VD" 1])
-;  ]
-
-  ;; Have SIR things update
-  if SIR-on? [
-    update-sir
-
-    ask citizens [
-      if seeings-change? [ update-seeings ]
     ]
   ]
 
@@ -322,59 +181,6 @@ end
 
 to update-citizen
   if show-citizen-political? [ give-self-ip-color ]
-  if show-citizen-sir? [ give-self-sir-color ]
-  set tp (sum (list (dict-value brain "VG") (dict-value brain "VS") (dict-value brain "VD")))
-end
-
-to pick-rand-agent
-  if selected-turtle != 0 [
-    let b [brain] of selected-turtle
-    give-agent-ip-color selected-turtle
-    ask selected-turtle [ set size 1 ]
-  ]
-
-  set selected-turtle one-of turtles
-  ;; Make unselected turtles & links transparent
-  ask turtles [
-    set size 1
-    if length color = 3 [
-      set color (lput 125 color)
-    ]
-  ]
-  ask links [
-    if length color = 3 [
-      set color (lput 125 color)
-    ]
-    set thickness 0.1
-  ]
-  ;; Make selected turtle & neighbors opaque
-  ask selected-turtle [
-    set color (extract-rgb orange)
-    set size 2
-
-    ask social-friend-neighbors [
-      set color (but-last color)
-      set size 1.5
-    ]
-    ask my-social-friends [
-      set color (but-last color)
-      set thickness 0.3
-    ]
-  ]
-end
-
-to deselect-random-agent
-  if selected-turtle != 0 [
-    let b [brain] of selected-turtle
-    give-agent-ip-color selected-turtle
-    ask selected-turtle [ set size 1 ]
-  ]
-  ask citizens [
-    update-citizen
-  ]
-  ask links [
-    set thickness 0.1
-  ]
 end
 
 to send-media-message-to-subscribers [ m message ]
@@ -387,20 +193,6 @@ to send-media-message-to-subscribers [ m message ]
       ]
     ]
     set cur-message-id (cur-message-id + 1)
-  ]
-end
-
-to receive-random-message
-  let m random-message [ "Attributes.P" "Attributes.I" ]
-  ask selected-turtle [
-    set brain (receive-message-py brain m)
-    update-citizen
-    if (dist-to-agent-brain brain m) <= (dict-value brain "alpha") [
-      ask social-friend-neighbors [
-        set brain (receive-message-py brain m)
-        update-citizen
-      ]
-    ]
   ]
 end
 
@@ -503,22 +295,6 @@ end
 to test
   py:setup "python"
   py:run "from messaging import *"
-  ;py:run "import sys"
-  ;py:run "print(sys.version)"
-  ;show(list-as-py-array [ "I" "P" ])
-  ;show(sample-attr-dist "Attributes.I")
-  ;show(tuple-list-as-py-dict ["test" 2])
-  ;show(tuple-list-as-py-dict [["test" 2] ["rest" 3]]) ;; <-- That doesn't work!!
-  ;show(sample-attr-dist-given "Attributes.P" [ "Attributes.I" 2 ])
-  ;show(random-message [ "Attributes.P" "Attributes.I" ])
-  ;show(receive-message-py ([brain] of turtle 0) (random-message [ "Attributes.P" "Attributes.I" ]))
-  ;show(agent-brain-as-py-dict ([brain] of turtle 0))
-  ;show(dist-to-agent-brain ([brain] of turtle 0) (random-message [ "Attributes.P" "Attributes.I" ]))
-  show([messages-heard] of citizen 0)
-  hear-message (citizen 0) 0 [ ["I" 1] ["P" 2] ]
-  show([messages-heard] of citizen 0)
-  hear-message (citizen 0) 1 [ ["I" 2] ["P" 2] ]
-  show([messages-heard] of citizen 0)
 end
 
 ;;;;;;;;;;;;;
@@ -597,25 +373,16 @@ to give-agent-ip-color [ agent ]
 end
 
 to give-self-ip-color
-  let i (dict-value brain "I")
-  let p (dict-value brain "P")
-  ;; Ideology shape
-  if i = 0 [ set shape "circle" ] ; Very Liberal
-  if i = 1 [ set shape "star" ] ; Liberal
-  if i = 2 [ set shape "triangle" ] ; Moderate
-  if i = 3 [ set shape "pentagon" ] ; Conservative
-  if i = 4 [ set shape "square" ] ; Very Conservative
+  let a (dict-value brain "A")
 
-  ;; Political color
-  if p = 0 [ set color (extract-rgb blue) ] ; Democrat
-  if p = 1 [ set color (extract-rgb violet) ] ; Independent
-  if p = 2 [ set color (extract-rgb red) ] ; Republican
-end
-
-to give-self-sir-color
-  if susceptible? [ set color susceptible-color ]
-  if infected? [ set color infected-color ]
-  if removed? [ set color removed-color ]
+  ;; Attribute A color
+  if a = -3 [ set color (extract-rgb 12) ]
+  if a = -2 [ set color (extract-rgb 14) ]
+  if a = -1 [ set color (extract-rgb 16) ]
+  if a = 0 [ set color (extract-rgb violet) ]
+  if a = 1 [ set color (extract-rgb 106) ]
+  if a = 2 [ set color (extract-rgb 104) ]
+  if a = 3 [ set color (extract-rgb 102) ]
 end
 
 to give-link-ip-color [ l ]
@@ -635,67 +402,15 @@ to give-self-link-ip-color
 end
 
 to layout
-  deselect-random-agent
   update-agents
 
   ifelse show-media-connections? [ ask subscribers [ make-link-visible ] ] [ ask subscribers [ make-link-transparent ] ]
-  ifelse show-friends? [ ask friends [ make-link-visible ] ] [ ask friends [ make-link-transparent ] ]
-  ifelse show-seeing? [ ask seeings [ make-link-visible ] ] [ ask seeings [ make-link-transparent ] ]
   ifelse show-social-friends? [
     ask social-friends [
       make-link-visible
       give-self-link-ip-color
     ]
   ] [ ask social-friends [ make-link-transparent ] ]
-end
-
-;;;;;;;;;;;;;
-; SIR PROCEDURES
-;;;;;;;;;;;;;
-
-to update-sir
-  let start-infected (count citizens with [infected?])
-  ask citizens with [infected?] [
-    let t self
-    ask seeing-neighbors [
-      if (random-float 1) < infection-chance and susceptible? [
-        set infected? true
-        set susceptible? false
-        ask t [
-          set num-infected num-infected + 1
-        ]
-      ]
-    ]
-
-    set time-infected time-infected + 1
-    if time-infected + (random-float 1) > infectiousness-duration [
-      set infected? false
-      set removed? true
-      set infectious-durations (lput time-infected infectious-durations)
-    ]
-  ]
-end
-
-to update-seeings
-  ask my-seeings [ die ]
-  foreach [other-end] of my-friends [ f ->
-    create-seeing-with f
-  ]
-  adjust-seeings-to-tp
-end
-
-to adjust-seeings-to-tp
-  let seeing-max (tp * tp-seeing-multiplier + tp-seeing-add)
-  let num-adds random seeing-max
-  repeat abs num-adds [
-    if num-adds > 0 [
-      if any? my-seeings [ ask one-of my-seeings [ die ] ]
-    ]
-    if num-adds < 0 [
-      let t tp
-      create-seeing-with one-of other citizens with [tp = t ]
-    ]
-  ]
 end
 
 ;;;;;;;;;;;;;;;;;
@@ -722,8 +437,8 @@ to connect_kronecker
       let rand random-float 1
       if (el > rand) and (u != v) [
         ;show(word "Linking turtle " u " with " v)
-        ask citizen u [ create-friend-with citizen v ]
-        ask citizen u [ create-seeing-with citizen v ]
+;        ask citizen u [ create-friend-with citizen v ]
+;        ask citizen u [ create-seeing-with citizen v ]
       ]
       set v v + 1
     ]
@@ -738,15 +453,8 @@ end
 ;;; Run a political MAG function in the python script.
 to-report mag
   report py:runresult(
-    word "MAG.political_mag(" Nk ")"
+    word "MAG.attr_mag(" Nk "," (list-as-py-array citizen-malleables false) ")"
   )
-end
-
-;;; Get the political attributes for each agent
-to-report political_L
-  report py:runresult(
-    word "MAG.political_L(" Nk ")"
-   )
 end
 
 to connect_mag
@@ -806,7 +514,7 @@ end
 
 to-report create-agent-brain [ id prior-attrs malleable-attrs prior-vals malleable-vals ]
   report py:runresult(
-    word "create_agent_brain(" id "," prior-attrs "," malleable-attrs "," prior-vals ", " malleable-vals ",'" brain-type "'," beta ", " threshold "," alpha ")"
+    word "create_agent_brain(" id "," (list-as-py-array prior-attrs false) "," (list-as-py-array malleable-attrs false) "," (list-as-py-array prior-vals false) ", " (list-as-py-array malleable-vals false) ",'" brain-type "'," beta ", " threshold "," alpha ")"
   )
 end
 
@@ -975,12 +683,12 @@ to-report list-as-py-array [ l val-quotes? ]
     if val-quotes? [ set el (word "'" el "'") ]
 
     ifelse i = length l
-    [ set py-array (word "" py-array el "]") ]
+    [ set py-array (word "" py-array el) ]
     [ set py-array (word "" py-array el ",") ]
 
     set i i + 1
   ]
-  report py-array
+  report (word py-array "]")
 end
 
 to-report list-item-as-dict-item [ el key-quotes? val-quotes? ]
@@ -1214,14 +922,14 @@ NIL
 1
 
 PLOT
-18
-1254
-237
-1447
-Partisanship
-Party
-# of agents
-0.0
+849
+562
+1246
+755
+A Histogram
+A Value
+Number of Agents
+-4.0
 4.0
 0.0
 50.0
@@ -1229,110 +937,59 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -13345367 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range 0 3\n\nhistogram [dict-value brain \"P\"] of citizens"
+"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -4 4\n\nhistogram [dict-value brain \"A\"] of citizens"
 
 MONITOR
-18
-1463
-90
-1508
-Democrats
-count citizens with [dict-value brain \"P\" = 0]
+847
+763
+905
+808
+-3
+count citizens with [dict-value brain \"A\" = -3]
 1
 1
 11
 
 MONITOR
-95
-1463
-167
-1508
-Moderates
-count citizens with [dict-value brain \"P\" = 1]
+904
+763
+961
+808
+-2
+count citizens with [dict-value brain \"A\" = -2]
 1
 1
 11
 
 MONITOR
-170
-1463
-249
-1508
-Republicans
-count citizens with [dict-value brain \"P\" = 2]
-17
-1
-11
-
-PLOT
-247
-1254
-535
-1446
-Ideology
-NIL
-NIL
-0.0
-5.0
-0.0
-50.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range 0 5\n\nhistogram [dict-value brain \"I\"] of citizens"
-
-MONITOR
-258
-1462
-312
-1507
-Very Lib.
-count citizens with [dict-value brain \"I\" = 0]
+967
+763
+1033
+808
+-1
+count citizens with [dict-value brain \"A\" = -1]
 1
 1
 11
 
 MONITOR
-315
-1462
-372
-1507
-Liberal
-count citizens with [dict-value brain \"I\" = 1]
+1038
+763
+1088
+808
+0
+count citizens with [dict-value brain \"A\" = 0]
 1
 1
 11
 
 MONITOR
-378
-1462
-444
-1507
-Moderate
-count citizens with [dict-value brain \"I\" = 2]
+1095
+763
+1145
+808
 1
-1
-11
-
-MONITOR
-449
-1462
-516
-1507
-Conservative
-count citizens with [dict-value brain \"I\" = 3]
-1
-1
-11
-
-MONITOR
-524
-1462
-590
-1507
-Very Con.
-count citizens with [dict-value brain \"I\" = 4]
+count citizens with [dict-value brain \"A\" = 1]
 1
 1
 11
@@ -1385,7 +1042,7 @@ beta
 beta
 0
 5
-5.0
+1.0
 0.1
 1
 NIL
@@ -1448,60 +1105,6 @@ NIL
 NIL
 NIL
 1
-
-PLOT
-20
-1088
-220
-1238
-Can Get Virus
-No/IDK/Yes
-# of citizens
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -1 2\nset-plot-y-range 0 Nk\n\nhistogram [dict-value brain \"VG\"] of citizens"
-
-PLOT
-233
-1089
-433
-1239
-Can Spread Virus
-No/IDK/Yes
-# of citizens
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -1 2\nset-plot-y-range 0 Nk\n\nhistogram [dict-value brain \"VS\"] of citizens"
-
-PLOT
-444
-1089
-644
-1239
-Virus is Dangerous
-No/IDK/Yes
-# of citizens
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -1 2\nset-plot-y-range 0 Nk\n\nhistogram [dict-value brain \"VD\"] of citizens"
 
 SLIDER
 205
@@ -1599,10 +1202,10 @@ Simulation Controls
 1
 
 TEXTBOX
-23
-1038
-173
-1056
+852
+505
+1002
+523
 Simulation State Plots
 14
 0.0
@@ -1617,338 +1220,11 @@ k
 k
 0
 10
-4.0
-1
-1
-NIL
-HORIZONTAL
-
-SWITCH
-830
-92
-963
-125
-show-friends?
-show-friends?
-1
-1
--1000
-
-SWITCH
-830
-132
-961
-165
-show-seeing?
-show-seeing?
-1
-1
--1000
-
-SLIDER
-25
-673
-197
-706
-infection-chance
-infection-chance
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-PLOT
-657
-1088
-1033
-1343
-Infections over time
-Tick
-# of infected turtles
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot count citizens with [infected?]"
-
-MONITOR
-857
-1355
-932
-1400
-Average r0
-mean [num-infected] of citizens with [(infected? or removed?) and num-infected > 0]
-2
-1
-11
-
-SLIDER
-206
-673
-378
-706
-tp-mean
-tp-mean
--3
-3
--3.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-206
-710
-378
-743
-tp-std-dev
-tp-std-dev
-0
-3
-1.4
-0.1
-1
-NIL
-HORIZONTAL
-
-PLOT
-1050
-1090
-1344
-1307
-TP Distribution
-TP Value
-Number of Turtles
--4.0
 5.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "histogram [tp] of citizens"
-
-MONITOR
-747
-1355
-853
-1400
-Infected Citizens
-count citizens with [infected?]
-17
-1
-11
-
-PLOT
-1050
-1315
-1345
-1550
-Friend Degree of Nodes
-Degree
-# of Nodes
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "set-plot-x-range 0 (max [count friend-neighbors] of citizens) + 1\nhistogram [count friend-neighbors] of citizens"
-
-SLIDER
-503
-676
-675
-709
-tp-seeing-multiplier
-tp-seeing-multiplier
-0
-5
-1.0
 1
 1
 NIL
 HORIZONTAL
-
-SLIDER
-505
-716
-677
-749
-tp-seeing-add
-tp-seeing-add
-0
-10
-2.0
-1
-1
-NIL
-HORIZONTAL
-
-MONITOR
-664
-1414
-802
-1459
-Total Infected Citizens
-count citizens with [infected? or removed?]
-17
-1
-11
-
-MONITOR
-812
-1414
-964
-1459
-Percent Infected Citizens
-100 * ((count citizens with [infected? or removed?]) / count citizens)
-3
-1
-11
-
-SWITCH
-390
-676
-493
-709
-tp?
-tp?
-0
-1
--1000
-
-SWITCH
-686
-676
-834
-709
-seeings-change?
-seeings-change?
-0
-1
--1000
-
-PLOT
-1353
-1314
-1632
-1550
-Seeing Degree of Nodes
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "set-plot-x-range 0 (max [count seeing-neighbors] of citizens) + 1\nhistogram [count seeing-neighbors] of citizens"
-
-PLOT
-1353
-1089
-1632
-1308
-Average Degree of Nodes by TP
-TP Value
-Average Degree
--4.0
-5.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "clear-plot\nlet t-p [ -3 -2 -1 0 1 2 3 ]\nforeach t-p [ val ->\n  ifelse length ([count seeing-neighbors] of citizens with [ tp = val ]) > 0 [\n    plotxy val mean [count seeing-neighbors] of citizens with [ tp = val ]\n  ] [ plotxy val 0 ]\n]"
-
-MONITOR
-665
-1469
-779
-1514
-Friendless Citizens
-count citizens with [ count friend-neighbors = 0 ]
-1
-1
-11
-
-MONITOR
-812
-1467
-1012
-1512
-Percent Infected Minus Friendless
-((count citizens with [ count friend-neighbors > 0 and (infected? or removed?) ]) / (count turtles with [ count friend-neighbors > 0 ])) * 100
-3
-1
-11
-
-MONITOR
-664
-1357
-745
-1402
-# of citizens
-count citizens
-17
-1
-11
-
-INPUTBOX
-582
-125
-807
-215
-seed
-[[0.6,0.26,0.24],\n  [0.40,0.2,0.4],\n  [0.21,0.24,0.65]]
-1
-0
-String
-
-TEXTBOX
-23
-623
-173
-641
-SIR & TP Parameters
-14
-0.0
-1
-
-TEXTBOX
-26
-652
-176
-670
-SIR Parameters
-11
-0.0
-1
-
-TEXTBOX
-206
-650
-356
-668
-TP Parameters
-11
-0.0
-1
 
 SWITCH
 1033
@@ -1962,21 +1238,10 @@ show-citizen-political?
 -1000
 
 SWITCH
-1033
-92
-1180
-125
-show-citizen-sir?
-show-citizen-sir?
-1
-1
--1000
-
-SWITCH
-829
-170
-996
-203
+832
+93
+999
+126
 show-social-friends?
 show-social-friends?
 1
@@ -1984,30 +1249,20 @@ show-social-friends?
 -1000
 
 TEXTBOX
-22
-1064
-172
-1082
+850
+532
+1000
+550
 Cognitive State
 11
 0.0
 1
 
-TEXTBOX
-657
-1064
-807
-1082
-SIR State
-11
-0.0
-1
-
 PLOT
-1639
-1314
-1908
-1549
+1933
+258
+2202
+493
 Social Friend Degree of Nodes
 NIL
 NIL
@@ -2021,77 +1276,6 @@ false
 PENS
 "default" 1.0 1 -16777216 true "" "set-plot-x-range 0 (max [count social-friend-neighbors] of citizens) + 1\nhistogram [count social-friend-neighbors] of citizens"
 
-SWITCH
-155
-796
-259
-829
-SIR-on?
-SIR-on?
-1
-1
--1000
-
-PLOT
-1638
-666
-1993
-915
-Virus Beliefs (is Dangerous) over Time
-Steps
-% who believe
-0.0
-10.0
-0.0
-1.0
-true
-true
-"" ""
-PENS
-"Yes" 1.0 0 -14070903 true "" "plot (count citizens with [(dict-value [brain] of self \"VD\") = 1]) / (count citizens)"
-"Maybe" 1.0 0 -14439633 true "" "plot (count citizens with [(dict-value [brain] of self \"VD\") = 0]) / (count citizens)"
-"No" 1.0 0 -5298144 true "" "plot (count citizens with [(dict-value [brain] of self \"VD\") = -1]) / (count citizens)"
-
-PLOT
-1278
-663
-1625
-912
-Virus Beliefs (Can Spread) over Time
-Steps
-% who believe
-0.0
-10.0
-0.0
-1.0
-true
-true
-"" ""
-PENS
-"Yes" 1.0 0 -13345367 true "" "plot (count citizens with [(dict-value [brain] of self \"VS\") = 1]) / (count citizens)"
-"Maybe" 1.0 0 -13840069 true "" "plot (count citizens with [(dict-value [brain] of self \"VD\") = 0]) / (count citizens)"
-"No" 1.0 0 -5298144 true "" "plot (count citizens with [(dict-value [brain] of self \"VD\") = -1]) / (count citizens)"
-
-PLOT
-1928
-243
-2391
-515
-percent_tp_gte_1
-NIL
-NIL
-0.0
-10.0
-0.0
-1.0
-true
-true
-"" ""
-PENS
-"Dem" 1.0 0 -14070903 true "" "plot (count citizens with [ tp >= 1 and (dict-value [brain] of self \"P\") = 0 ]) / (count citizens with [(dict-value [brain] of self \"P\") = 0])"
-"Ind" 1.0 0 -10141563 true "" "plot (count citizens with [ tp >= 1 and (dict-value [brain] of self \"P\") = 1 ]) / (count citizens with [(dict-value [brain] of self \"P\") = 1])"
-"Con" 1.0 0 -5298144 true "" "plot (count citizens with [ tp >= 1 and (dict-value [brain] of self \"P\") = 2 ]) / (count citizens with [(dict-value [brain] of self \"P\") = 2])"
-
 TEXTBOX
 1926
 215
@@ -2103,24 +1287,24 @@ Aggregate Charts
 1
 
 TEXTBOX
-25
-763
-213
-786
+26
+619
+214
+642
 Macro Parameters
-1
+10
 0.0
 1
 
 CHOOSER
 410
-909
+765
 552
-954
+810
 spread-type
 spread-type
 "simple" "complex" "distance"
-2
+0
 
 TEXTBOX
 833
@@ -2133,21 +1317,21 @@ Display
 1
 
 SWITCH
-26
-796
-145
-829
+28
+652
+147
+685
 load-graph?
 load-graph?
-0
+1
 1
 -1000
 
 INPUTBOX
 20
-853
+709
 235
-913
+769
 load-graph-path
 ./citizen-graph-k4.csv
 1
@@ -2183,10 +1367,10 @@ NIL
 1
 
 CHOOSER
-265
-859
-404
-904
+266
+715
+405
+760
 dist-fn
 dist-fn
 "l2" "l2 weighted"
@@ -2224,9 +1408,9 @@ HORIZONTAL
 
 CHOOSER
 410
-860
+715
 549
-905
+760
 brain-type
 brain-type
 "discrete" "continuous"
@@ -2260,39 +1444,96 @@ String
 
 INPUTBOX
 25
-312
-241
-373
+285
+473
+360
 messages-data-path
-D:/school/grad-school/Tufts/research/covid-misinfo/messaging-data/gradual.json
+D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data/all-one.json
 1
 0
 String
 
 TEXTBOX
-23
-276
-238
-302
+24
+263
+239
+289
 Message Parameters
 11
 0.0
 1
 
 SLIDER
-249
-313
-422
-348
+25
+363
+198
+396
 message-repeats
 message-repeats
 0
 10
-3.0
+1.0
 1
 1
 NIL
 HORIZONTAL
+
+INPUTBOX
+582
+125
+807
+215
+seed
+[[0.6,0.26,0.24],\n  [0.40,0.2,0.4],\n  [0.21,0.24,0.65]]
+1
+0
+String
+
+PLOT
+847
+175
+1221
+463
+Percent of Agents with Beliefs
+Steps
+% of Agents
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"3" 1.0 0 -15390905 true "" "plot (count citizens with [ dict-value brain \"A\" = 3 ]) / (count citizens)"
+"2" 1.0 0 -14070903 true "" "plot (count citizens with [ dict-value brain \"A\" = 2 ]) / (count citizens)"
+"1" 1.0 0 -10649926 true "" "plot (count citizens with [ dict-value brain \"A\" = 1 ]) / (count citizens)"
+"0" 1.0 0 -10141563 true "" "plot (count citizens with [ dict-value brain \"A\" = 0 ]) / (count citizens)"
+"-1" 1.0 0 -2139308 true "" "plot (count citizens with [ dict-value brain \"A\" = -1 ]) / (count citizens)"
+"-2" 1.0 0 -5298144 true "" "plot (count citizens with [ dict-value brain \"A\" = -2 ]) / (count citizens)"
+"-3" 1.0 0 -10873583 true "" "plot (count citizens with [ dict-value brain \"A\" = -3 ]) / (count citizens)"
+
+MONITOR
+1150
+763
+1208
+808
+2
+count citizens with [dict-value brain \"A\" = 2]
+17
+1
+11
+
+MONITOR
+1212
+763
+1270
+808
+3
+count citizens with [dict-value brain \"A\" = 3]
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
