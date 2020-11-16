@@ -112,14 +112,14 @@ end
 
 to create-media
   ; Disbelief
-  create-medias 1 [
-    set media-attrs [ ["A" -3] ]
-    set cur-message-id 0
-    set messages-sent []
-    setxy -4 0
-    set color red
-    set idee "DIS"
-  ]
+;  create-medias 1 [
+;    set media-attrs [ ["A" -3] ]
+;    set cur-message-id 0
+;    set messages-sent []
+;    setxy -4 0
+;    set color red
+;    set idee "DIS"
+;  ]
 
 ;  ; Uncertainty
 ;  create-medias 1 [
@@ -302,9 +302,10 @@ end
 ;;;;;;;;;;;;;
 
 to save-graph
-  let cit-ip ([(list self (dict-value brain "P") (dict-value brain "I") (dict-value brain "ID"))] of citizens)
+  ;; TODO: Find some way to get the prior & malleable attributes into a list rather than hardcoding
+  let cit-ip ([(list self (dict-value brain "A") (dict-value brain "ID"))] of citizens)
   let cit-social [[self] of both-ends] of social-friends
-  let media-ip ([(list self (dict-value media-attrs "P") (dict-value media-attrs "I"))] of medias)
+  let media-ip ([(list self (dict-value media-attrs "A"))] of medias)
   let media-sub [[self] of both-ends] of subscribers
   py:run (word "save_graph('" save-graph-path "','" cit-ip "','" cit-social "','" media-ip "','" media-sub "')")
 end
@@ -316,12 +317,11 @@ to read-graph
   let mediaz item 2 graph
   let media-subs item 3 graph
 
-  ;; id, p, i
+  ;; id, a
   foreach citizenz [ c ->
     let id item 0 c
-    let p item 1 c
-    let i item 2 c
-    create-citizen id i p
+    let a item 1 c
+    create-citizen id [] (list a)
   ]
 
   ;; Fudging this for the time-being since we're creating the same media every time
@@ -1013,9 +1013,9 @@ NIL
 
 SWITCH
 20
-486
+507
 153
-519
+540
 uniform-beta?
 uniform-beta?
 0
@@ -1023,10 +1023,10 @@ uniform-beta?
 -1000
 
 SWITCH
-573
-486
-732
-519
+574
+507
+733
+540
 uniform-threshold?
 uniform-threshold?
 0
@@ -1035,24 +1035,24 @@ uniform-threshold?
 
 SLIDER
 20
-446
+467
 192
-479
+500
 beta
 beta
 0
 5
-1.0
+2.0
 0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-573
-446
-703
-479
+574
+467
+704
+500
 threshold
 threshold
 0
@@ -1064,15 +1064,15 @@ NIL
 HORIZONTAL
 
 SLIDER
-388
-446
-560
-479
+389
+467
+561
+500
 epsilon
 epsilon
 0
 10
-0.8
+2.0
 0.1
 1
 NIL
@@ -1085,7 +1085,7 @@ SWITCH
 85
 show-media-connections?
 show-media-connections?
-0
+1
 1
 -1000
 
@@ -1108,9 +1108,9 @@ NIL
 
 SLIDER
 205
-446
+467
 377
-479
+500
 alpha
 alpha
 0
@@ -1133,19 +1133,19 @@ Number of citizens
 
 TEXTBOX
 20
-430
+450
 170
-448
+468
 Threshold to believe messages
 11
 0.0
 1
 
 TEXTBOX
-206
-426
-356
-444
+207
+447
+357
+465
 Threshold to share messages
 11
 0.0
@@ -1153,9 +1153,9 @@ Threshold to share messages
 
 TEXTBOX
 390
-426
+447
 556
-454
+475
 Threshold to subscribe to media
 11
 0.0
@@ -1163,9 +1163,9 @@ Threshold to subscribe to media
 
 TEXTBOX
 20
-399
+420
 170
-417
+438
 Citizen Parameters
 14
 0.0
@@ -1183,9 +1183,9 @@ Simulation Parameters
 
 TEXTBOX
 575
-423
+444
 740
-451
+472
 Tokens needed to change belief
 11
 0.0
@@ -1244,7 +1244,7 @@ SWITCH
 126
 show-social-friends?
 show-social-friends?
-1
+0
 1
 -1000
 
@@ -1304,7 +1304,7 @@ CHOOSER
 spread-type
 spread-type
 "simple" "complex" "distance"
-0
+2
 
 TEXTBOX
 833
@@ -1344,7 +1344,7 @@ INPUTBOX
 239
 247
 save-graph-path
-./citizen-graph-k4.csv
+./exp1-graph.csv
 1
 0
 String
@@ -1377,25 +1377,25 @@ dist-fn
 0
 
 SLIDER
-23
-543
-197
-576
+24
+564
+198
+597
 simple-spread-chance
 simple-spread-chance
 0
 1
-0.04
+0.15
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-208
-543
-382
-576
+209
+564
+383
+597
 complex-spread-ratio
 complex-spread-ratio
 0
@@ -1434,10 +1434,10 @@ HORIZONTAL
 INPUTBOX
 251
 189
-467
-250
+568
+251
 sim-output-dir
-D:\\school\\grad-school\\Tufts\\research\\covid-misinfo\\simulation-data\\11-4-20\\cognitive/gradual
+D:\\school\\grad-school\\Tufts\\research\\cognitive-contagion\\simulation-data\\11-16-20\\cognitive\\gradual
 1
 0
 String
@@ -1448,7 +1448,7 @@ INPUTBOX
 473
 360
 messages-data-path
-D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data/all-one.json
+D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data/default.json
 1
 0
 String

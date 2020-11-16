@@ -236,7 +236,7 @@ def save_graph(path, cit, cit_social, media, media_sub):
     f = open(path, 'w')
     f.write(f'CITIZENS {len(cit_arr)-1}\n')
     for c in filter(lambda el: len(el) > 1, cit_arr):
-        f.write(f'{c[0].replace("citizen_","")},{c[1]},{c[2]}\n')
+        f.write(f'{c[0].replace("citizen_","")},{c[1]}\n')
 
     f.write(f'CITIZEN_SOCIAL_LINKS {len(cit_social_arr)-1}\n')
     for c in filter(lambda el: len(el) > 1, cit_social_arr):
@@ -244,7 +244,7 @@ def save_graph(path, cit, cit_social, media, media_sub):
 
     f.write(f'MEDIA {len(media_arr)-1}\n')
     for c in filter(lambda el: len(el) > 1, media_arr):
-        f.write(f'{c[0].replace("media_","")},{c[1]},{c[2]}\n')
+        f.write(f'{c[0].replace("media_","")},{c[1]}\n')
 
     f.write(f'MEDIA_SUB_LINKS {len(media_sub_arr)-1}\n')
     for c in filter(lambda el: len(el) > 1, media_sub_arr):
