@@ -225,7 +225,7 @@ def nlogo_parse_chunk(chunk):
 FILE I/O
 '''
 
-DATA_DIR = 'D:/school/grad-school/Tufts/research/covid-misinfo/'
+DATA_DIR = 'D:/school/grad-school/Tufts/research/cognitive-contagion/'
 
 def save_graph(path, cit, cit_social, media, media_sub):
     cit_arr = nlogo_list_to_arr(nlogo_replace_agents(cit, [ 'citizen' ]))
@@ -362,7 +362,7 @@ Matplotlib plot.
 :param filename: A piece of filename that indicates which files to parse
 in the process. This should usually be the name of the chart in the NetLogo file.
 '''
-def process_multi_chart_data(path, filename='percent_tp'):
+def process_multi_chart_data(path, filename='percent-agent-beliefs', show_plot=False):
   props = None
   multi_data = []
   for file in os.listdir(path):
@@ -370,7 +370,17 @@ def process_multi_chart_data(path, filename='percent_tp'):
       data = process_chart_data(f'{path}/{file}')
       props = data[0]
       multi_data.append(data[1])
-  return plot_nlogo_multi_chart(props, multi_data)
+  plot = plot_nlogo_multi_chart(props, multi_data)
+  plt.savefig(f'{path}/aggregate-chart.png')
+  if show_plot: plt.show()
+  return plot
+
+def process_experiment1_outputs(path):
+  contagion_types = [ 'distance', 'simple' ]
+  message_files = [ '50-50', 'default', 'gradual' ]
+  for ct in contagion_types:
+    for mf in message_files:
+      process_multi_chart_data(f'{path}/{ct}/{mf}', 'percent-agent-beliefs')
 
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot

@@ -12,6 +12,9 @@ globals [
   ;; SIR
   Nk
   kronecker_g
+
+  ;; For experiments
+  contagion-dir
 ]
 
 citizens-own [
@@ -69,7 +72,7 @@ to setup
     read-graph
   ]
 
-  set messages-over-time load-messages-over-time messages-data-path
+  set messages-over-time load-messages-over-time (word messages-data-path "/" message-file ".json")
 
   let max_turtle max-one-of turtles [ count social-friend-neighbors ]
   repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
@@ -1323,7 +1326,7 @@ SWITCH
 685
 load-graph?
 load-graph?
-1
+0
 1
 -1000
 
@@ -1333,7 +1336,7 @@ INPUTBOX
 235
 769
 load-graph-path
-./citizen-graph-k4.csv
+./exp1-graph.csv
 1
 0
 String
@@ -1437,7 +1440,7 @@ INPUTBOX
 568
 251
 sim-output-dir
-D:\\school\\grad-school\\Tufts\\research\\cognitive-contagion\\simulation-data\\11-16-20\\cognitive\\gradual
+D:/school/grad-school/Tufts/research/cognitive-contagion/simulation-data/
 1
 0
 String
@@ -1448,7 +1451,7 @@ INPUTBOX
 473
 360
 messages-data-path
-D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data/default.json
+D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data
 1
 0
 String
@@ -1494,7 +1497,7 @@ PLOT
 175
 1221
 463
-Percent of Agents with Beliefs
+percent-agent-beliefs
 Steps
 % of Agents
 0.0
@@ -1534,6 +1537,16 @@ count citizens with [dict-value brain \"A\" = 3]
 17
 1
 11
+
+CHOOSER
+479
+290
+618
+335
+message-file
+message-file
+"default" "50-50" "gradual"
+0
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1882,13 +1895,26 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="default-exp" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
-    <setup>setup</setup>
+  <experiment name="experiment-1" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
+    <setup>setup
+let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe))
+set contagion-dir (word run-dir "/" spread-type "/" message-file)
+py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
+py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-dir "')")</setup>
     <go>go</go>
     <final>let rand random 10000
-export-world (word sim-output-dir "/" rand "_world.csv")
-export-plot "percent_tp_gte_1" (word sim-output-dir "/" rand "_percent_tp.csv")</final>
+export-world (word contagion-dir "/" rand "_world.csv")
+export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent-beliefs.csv")</final>
     <metric>count citizens</metric>
+    <enumeratedValueSet variable="spread-type">
+      <value value="&quot;simple&quot;"/>
+      <value value="&quot;distance&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="message-file">
+      <value value="&quot;default&quot;"/>
+      <value value="&quot;50-50&quot;"/>
+      <value value="&quot;gradual&quot;"/>
+    </enumeratedValueSet>
   </experiment>
 </experiments>
 @#$#@#$#@
