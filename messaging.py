@@ -232,7 +232,7 @@ def believe_message(agent, message, spread_type, brain_type):
               update_attrs[attr] = message[attr]
       update_agent_tokens(agent, update_attrs)
     # Just have the agent believe whatever it is
-    elif spread_type == "simple":
+    elif spread_type == "simple" or spread_type == "complex":
       for m in message:
         if m in agent['malleable']: agent[m] = message[m]
   elif brain_type == 'continuous':

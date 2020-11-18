@@ -114,34 +114,36 @@ to create-citizenz
 end
 
 to create-media
-  ; Disbelief
-;  create-medias 1 [
-;    set media-attrs [ ["A" -3] ]
-;    set cur-message-id 0
-;    set messages-sent []
-;    setxy -4 0
-;    set color red
-;    set idee "DIS"
-;  ]
+  if media-agents? [
+    ; Disbelief
+    ;  create-medias 1 [
+    ;    set media-attrs [ ["A" -3] ]
+    ;    set cur-message-id 0
+    ;    set messages-sent []
+    ;    setxy -4 0
+    ;    set color red
+    ;    set idee "DIS"
+    ;  ]
 
-;  ; Uncertainty
-;  create-medias 1 [
-;    set media-attrs [ ["A" 0] ]
-;    set cur-message-id 0
-;    set messages-sent []
-;    setxy -3 0
-;    set color violet
-;    set idee "UNC"
-;  ]
+    ;  ; Uncertainty
+    ;  create-medias 1 [
+    ;    set media-attrs [ ["A" 0] ]
+    ;    set cur-message-id 0
+    ;    set messages-sent []
+    ;    setxy -3 0
+    ;    set color violet
+    ;    set idee "UNC"
+    ;  ]
 
-  ; Belief
-  create-medias 1 [
-    set media-attrs [ ["A" 3] ]
-    set cur-message-id 0
-    set messages-sent []
-    setxy -4 1
-    set color blue
-    set idee "BEL"
+    ; Belief
+    create-medias 1 [
+      set media-attrs [ ["A" 3] ]
+      set cur-message-id 0
+      set messages-sent []
+      setxy -4 1
+      set color blue
+      set idee "BEL"
+    ]
   ]
 end
 
@@ -156,19 +158,22 @@ to go
 end
 
 to step
-  ;; Have media companies create messages
-
-  let messages (dict-value messages-over-time (word ticks))
-  foreach messages [ media-messages ->
-    let media-idee item 0 media-messages
-    foreach (item 1 media-messages) [ m ->
-      ask medias with [ idee = media-idee] [
-        let a (dict-value m "A")
-        repeat message-repeats [
-          send-media-message-to-subscribers self (list (list "A" a))
+  ifelse media-agents? [
+    ;; Have media companies create messages
+    let messages (dict-value messages-over-time (word ticks))
+    foreach messages [ media-messages ->
+      let media-idee item 0 media-messages
+      foreach (item 1 media-messages) [ m ->
+        ask medias with [ idee = media-idee] [
+          let a (dict-value m "A")
+          repeat message-repeats [
+            send-media-message-to-subscribers self (list (list "A" a))
+          ]
         ]
       ]
     ]
+  ] [
+
   ]
 
   layout
@@ -236,18 +241,28 @@ to receive-message [ cit sender message message-id ]
         ]
       ]
 
-      ;; For this one, have an agent believe the media wholesale, or otherwise keep track of how
-      ;; many friends tell you a message. If a requisite ratio of them do, then believe it
       if spread-type = "complex" [
-        ifelse is-media? sender [
+        let believing-neighbors 0
+        ask social-friend-neighbors [
+          let believes true
+          foreach message [ m ->
+            let attr (item 0 m)
+            let val (item 1 m)
+            set believes (believes and (dict-value brain attr = val))
+          ]
+          if believes [
+            set believing-neighbors believing-neighbors + 1
+          ]
+        ]
+;        show (word "Citizen " cit "has ratio " (believing-neighbors / length sort social-friend-neighbors))
+        if (believing-neighbors / length sort social-friend-neighbors) >= complex-spread-ratio [
+;          show (word "Citizen " cit " believing with ratio " (believing-neighbors / length sort social-friend-neighbors))
           set brain (believe-message-py brain message)
           believe-message self message-id message
+          ;; Unsure if this sharing behavior is correct...
           ask social-friend-neighbors [
             receive-message self cit message message-id
           ]
-        ] [
-          let unique-heard-from 0
-          let messages-at-tick (dict-value messages-heard ticks)
         ]
       ]
     ]
@@ -1075,7 +1090,7 @@ epsilon
 epsilon
 0
 10
-2.0
+0.0
 0.1
 1
 NIL
@@ -1088,7 +1103,7 @@ SWITCH
 85
 show-media-connections?
 show-media-connections?
-1
+0
 1
 -1000
 
@@ -1247,7 +1262,7 @@ SWITCH
 126
 show-social-friends?
 show-social-friends?
-0
+1
 1
 -1000
 
@@ -1307,7 +1322,7 @@ CHOOSER
 spread-type
 spread-type
 "simple" "complex" "distance"
-2
+1
 
 TEXTBOX
 833
@@ -1403,7 +1418,7 @@ complex-spread-ratio
 complex-spread-ratio
 0
 1
-0.5
+0.25
 0.01
 1
 NIL
@@ -1547,6 +1562,17 @@ message-file
 message-file
 "default" "50-50" "gradual"
 0
+
+SWITCH
+585
+224
+719
+258
+media-agents?
+media-agents?
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1900,6 +1926,7 @@ NetLogo 6.1.1
 let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe))
 set contagion-dir (word run-dir "/" spread-type "/" message-file)
 py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
+py:run (word "if not os.path.isdir('" run-dir "/" spread-type "'): os.mkdir('" run-dir "/" spread-type "')")
 py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-dir "')")</setup>
     <go>go</go>
     <final>let rand random 10000

@@ -375,8 +375,14 @@ def process_multi_chart_data(path, filename='percent-agent-beliefs', show_plot=F
   if show_plot: plt.show()
   return plot
 
+'''
+Process charts for experiment 1: the experiment where one media agent
+tries to sway the entire population. It runs each contagion type for
+each of three message files 10 times. This creates aggregate charts
+for each of the 6 combinations.
+'''
 def process_experiment1_outputs(path):
-  contagion_types = [ 'distance', 'simple' ]
+  contagion_types = [ 'distance', 'simple', 'complex' ]
   message_files = [ '50-50', 'default', 'gradual' ]
   for ct in contagion_types:
     for mf in message_files:
