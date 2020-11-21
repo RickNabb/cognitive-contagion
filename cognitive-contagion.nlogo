@@ -173,7 +173,13 @@ to step
       ]
     ]
   ] [
-
+;    ask citizens [
+;      let c self
+;      ask social-friend-neighbors [
+;        let message []
+;        receive-message self c ([brain] of self) 0
+;      ]
+;    ]
   ]
 
   layout
@@ -209,24 +215,37 @@ to receive-message [ cit sender message message-id ]
     if not (heard-message? self ticks message-id) [
       hear-message self message-id message
 
-      if spread-type = "distance" [
-        let dist-to-brain 1000
-        if dist-fn = "l2" [ set dist-to-brain dist-to-agent-brain brain message ]
-        if dist-fn = "l2 weighted" [ set dist-to-brain weighted-dist-to-agent-brain brain message ]
+      if spread-type = "cognitive" [
+        let p 0
+        let scalar 1
+        let expon 1
+        let trans 0
+        let dist (dist-to-agent-brain brain message)
+
+        if cognitive-scalar? [ set scalar cognitive-scalar ]
+        if cognitive-exponent? [ set expon cognitive-exponent ]
+        if cognitive-translate? [ set trans cognitive-translate ]
+
+        ;; Good values for l2:
+        if cognitive-fn = "l2" [ set p 1 / (1 + (scalar * dist + trans) ^ expon) ]
+
+        ;; Good values for sigmoid: expon = -4, trans = -5 (works like old threshold function)
+        if cognitive-fn = "sigmoid" [ set p (1 / (1 + (exp (-1 * expon * dist + trans)))) ]
+;        show (word "dist: " dist)
+;        show (word self ": " (dict-value brain "A") " " message " (p=" p ")")
 
         ;; Whether or not to believe the message
-        if dist-to-brain <= (dict-value brain "beta") [
+        let roll random-float 1
+        if roll <= p [
+;          show (word "believed with p" p " and roll " roll)
           set brain (believe-message-py brain message)
           believe-message self message-id message
-        ]
-        update-citizen
 
-        ;; Whether or not to share with neighbors
-        if dist-to-brain <= (dict-value brain "alpha") [
           ask social-friend-neighbors [
             receive-message self cit message message-id
           ]
         ]
+        update-citizen
       ]
 
       if spread-type = "simple" [
@@ -578,7 +597,7 @@ end
 
 to-report weighted-dist-to-agent-brain [ agent-brain message ]
   report py:runresult(
-    word "weighted_dist_to_agent_brain(" (agent-brain-as-py-dict agent-brain) "," (list-as-py-dict message true false) ",attribute_weights)"
+    word "weighted_dist_to_agent_brain(" (agent-brain-as-py-dict agent-brain) "," (list-as-py-dict message true false) "," cognitive-scalar ")"
   )
 end
 
@@ -1090,7 +1109,7 @@ epsilon
 epsilon
 0
 10
-0.0
+1.0
 0.1
 1
 NIL
@@ -1315,14 +1334,14 @@ Macro Parameters
 1
 
 CHOOSER
-410
-765
-552
-810
+557
+715
+699
+760
 spread-type
 spread-type
-"simple" "complex" "distance"
-1
+"simple" "complex" "cognitive"
+2
 
 TEXTBOX
 833
@@ -1389,9 +1408,9 @@ CHOOSER
 715
 405
 760
-dist-fn
-dist-fn
-"l2" "l2 weighted"
+cognitive-fn
+cognitive-fn
+"l2" "sigmoid"
 0
 
 SLIDER
@@ -1418,7 +1437,7 @@ complex-spread-ratio
 complex-spread-ratio
 0
 1
-0.25
+0.35
 0.01
 1
 NIL
@@ -1432,7 +1451,7 @@ CHOOSER
 brain-type
 brain-type
 "discrete" "continuous"
-1
+0
 
 SLIDER
 24
@@ -1570,6 +1589,84 @@ SWITCH
 258
 media-agents?
 media-agents?
+0
+1
+-1000
+
+SLIDER
+268
+804
+441
+838
+cognitive-exponent
+cognitive-exponent
+-10
+10
+-4.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+268
+765
+441
+799
+cognitive-scalar
+cognitive-scalar
+-20
+20
+-5.0
+1
+1
+NIL
+HORIZONTAL
+
+SWITCH
+448
+765
+593
+799
+cognitive-scalar?
+cognitive-scalar?
+0
+1
+-1000
+
+SWITCH
+449
+807
+614
+841
+cognitive-exponent?
+cognitive-exponent?
+0
+1
+-1000
+
+SLIDER
+267
+849
+440
+883
+cognitive-translate
+cognitive-translate
+-10
+10
+-5.0
+1
+1
+NIL
+HORIZONTAL
+
+SWITCH
+450
+850
+613
+884
+cognitive-translate?
+cognitive-translate?
 0
 1
 -1000
@@ -1935,7 +2032,8 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
     <metric>count citizens</metric>
     <enumeratedValueSet variable="spread-type">
       <value value="&quot;simple&quot;"/>
-      <value value="&quot;distance&quot;"/>
+      <value value="&quot;complex&quot;"/>
+      <value value="&quot;cognitive&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="message-file">
       <value value="&quot;default&quot;"/>

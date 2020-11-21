@@ -65,7 +65,7 @@ attribute in a list of attributes.
 def random_message(attrs):
     m = {}
     for attr in attrs:
-        if attr.name in EmpiricalDistributions:
+        if attr.name in AttributeDistributions:
             m[attr.name] = random_dist_sample(attr)
         else:
             m[attr.name] = random_sample(attr)
@@ -144,15 +144,6 @@ def create_agent_brain(
 
     return agent
 
-def test_create_agent_brain():
-    print(create_agent_brain(
-        123,
-        [Attributes.I, Attributes.P],
-        [Attributes.VG, Attributes.TD],
-        [2, 0],
-        [0, 0],
-        0.5, 0.4))
-
 """
 Update an agent's belief tokens. This is the modeling of an agent starting
 to change their beliefs. If the token count reaches a certain threshold,
@@ -176,18 +167,6 @@ def update_agent_tokens(agent, attrs):
                 agent['tokens'][attr][tokens] = 0
         else:
             agent['tokens'][attr][attrs[attr]] += 1
-
-def test_update_agent_tokens():
-    agent = create_agent_brain(
-        123,
-        [Attributes.I, Attributes.P],
-        [Attributes.VG, Attributes.TD],
-        [2, 0],
-        [0, 0],
-        0.5, 0.4)
-    for i in range(0, 20):
-        update_agent_tokens(agent, random_message([Attributes.I, Attributes.P]))
-        print(agent)
 
 """
 Have an agent compare its beliefs to those in the message. The distance between
@@ -222,19 +201,19 @@ of spread to simulate.
 """
 def believe_message(agent, message, spread_type, brain_type):
   if brain_type == 'discrete':
-    agent_beliefs = agent_beliefs_from_message(agent, message)
-    # Update agent belief tokens if the message is within updating threshold
-    if spread_type == "distance":
-      #print('updating belief tokens')
-      update_attrs = {}
-      for attr in message:
-          if message[attr] != agent_beliefs[attr] and attr in agent['tokens']:
-              update_attrs[attr] = message[attr]
-      update_agent_tokens(agent, update_attrs)
-    # Just have the agent believe whatever it is
-    elif spread_type == "simple" or spread_type == "complex":
-      for m in message:
-        if m in agent['malleable']: agent[m] = message[m]
+    # agent_beliefs = agent_beliefs_from_message(agent, message)
+    # # Update agent belief tokens if the message is within updating threshold
+    # if spread_type == "cognitive":
+    #   #print('updating belief tokens')
+    #   update_attrs = {}
+    #   for attr in message:
+    #       if message[attr] != agent_beliefs[attr] and attr in agent['tokens']:
+    #           update_attrs[attr] = message[attr]
+    #   update_agent_tokens(agent, update_attrs)
+    # # Just have the agent believe whatever it is
+    # elif spread_type == "simple" or spread_type == "complex":
+    for m in message:
+      if m in agent['malleable']: agent[m] = message[m]
   elif brain_type == 'continuous':
     for attr in filter(lambda el: el in agent['malleable'], message):
       cont_attr = agent['cont_tokens'][attr]
@@ -242,19 +221,6 @@ def believe_message(agent, message, spread_type, brain_type):
       agent[attr] = round(cont_attr)
 
   return agent
-
-def test_receive_message():
-    agent = create_agent_brain(
-        123,
-        [Attributes.I, Attributes.P],
-        [Attributes.VG, Attributes.TD],
-        [2, 0],
-        [0, 0],
-        0.5, 0.4)
-    print(agent)
-    message = random_message([Attributes.I, Attributes.P])
-    receive_message(agent, message)
-    print(agent)
 
 """
 Get the distance between a message and the corresponding vector of agent brain
@@ -277,29 +243,12 @@ parameters.
 :param message: The message.
 :param weights: The weighting scheme to use for both messages
 """
-def weighted_dist_to_agent_brain(agent, message, weights):
+def weighted_dist_to_agent_brain(agent, message, weight):
     a_arr = agent_belief_vec_from_message(agent, message)
-    w_arr = np.array([ weights[attr] for attr in message ])
+    w_arr = np.array([ weight for attr in message ])
     m_arr = message_as_array(message)
 
     return weighted_message_distance(m_arr, a_arr, w_arr, w_arr)
-
-def test_weighted_dist_to_agent_brain():
-    agent = create_agent_brain(
-        0,
-        [ Attributes.I, Attributes.P ],
-        [ Attributes.VG, Attributes.VD, Attributes.VS ],
-        [ Attributes.I.value.CONSERVATIVE.value, Attributes.P.value.REPUBLICAN.value ],
-        [ Attributes.VG.value.DISBELIEVE.value, Attributes.VD.value.UNCERTAIN.value, Attributes.VS.value.UNCERTAIN.value ]
-    )
-    message = {
-        Attributes.I.name: Attributes.I.value.CONSERVATIVE.value,
-        Attributes.P.name: Attributes.P.value.REPUBLICAN.value,
-        Attributes.VG.name: Attributes.VG.value.BELIEVE.value,
-        Attributes.VD.name: Attributes.VD.value.DISBELIEVE.value,
-        Attributes.VS.name: Attributes.VS.value.UNCERTAIN.value,
-    }
-    print(weighted_dist_to_agent_brain(agent, message, attribute_weights))
 
 def agent_beliefs_from_message(agent, message):
   agent_beliefs = {}
@@ -324,34 +273,6 @@ def pass_message(speaker, m, receiver):
 INTEGRATION TESTING FUNCTIONS
 """
 
-def test_simple_messaging():
-    n = 25
-
-    # Create nodes w/ attributes
-    agents = []
-    for i in range(0, n):
-        ideology = sample_dist(IVals, IDist)
-        partisanship = sample_dist(PIValsByI[ideology], PGivenIDist[ideology])
-        agents.append(create_agent_brain(
-            0,
-            [ Attributes.I, Attributes.P ],
-            [ Attributes.VG, Attributes.VD, Attributes.VS ],
-            [ Attributes.I.CONSERVATIVE, Attributes.P.REPUBLICAN ],
-            [ Attributes.VG.DISBELIEVE, Attributes.VD.UNCERTAIN, Attributes.VS.UNCERTAIN ]
-        ))
-    print(agents)
-
-    # Assume model where everyone can hear everyone - broadcast
-    m = 10
-    for i in range(0, m):
-        rand_index = math.floor(random() * n)
-        rand_agent = agents[int(rand_index)]
-        for other in agents:
-            if other['ID'] == rand_agent['ID']:
-                continue
-            pass_message(rand_agent, random_message([Attributes.I, Attributes.P]), other)
-    print(agents)
-
 '''
 Read message data over time for given media agent IDs.
 
@@ -370,17 +291,3 @@ def read_message_over_time_data(path):
           messages[t] = data[last_valid_t]
     f.close()
     return messages
-
-def main():
-    #test_simple_messaging()
-    #test_create_agent_brain()
-    #test_random_dist_sample()
-    #test_random_message()
-    #test_receive_message()
-    #test_update_agent_tokens()
-    #test_random_sample()
-    test_weighted_dist_to_agent_brain()
-
-if __name__ == "__main__":
-    main()
-  

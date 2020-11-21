@@ -107,14 +107,6 @@ def random_dist_sample(attr, given=None):
         dist = emp_dist['dist']
     return list(attr.value)[sample_dist(vals, dist)].value
 
-def test_random_dist_sample():
-    attr = Attributes.I
-    print('Sample from I: ' + str(random_dist_sample(attr)))
-
-    attr = Attributes.P
-    print('Sample from P: ' + str(random_dist_sample(attr)))
-    print('Sample from P given I=2: ' + str(random_dist_sample(attr, { Attributes.I: 2 })))
-
 """
 Sample an attribute with an equal distribution over the values.
 
@@ -136,12 +128,6 @@ RELEVANT EMPIRICAL DATA
 AVals = [1, 1, 1, 1, 1, 1, 1]
 ADist = create_discrete_dist_sm(AVals)
 AMAGTheta = np.ones((7,7)) * 0.05
-
-# Weighting of attributes
-# TODO: Find some sort of empirical measure to take this from
-attribute_weights = {
-    Attributes.A.name: 1.0,
-}
 
 AttributeValues = {
   Attributes.A.name: {
@@ -382,7 +368,7 @@ each of three message files 10 times. This creates aggregate charts
 for each of the 6 combinations.
 '''
 def process_experiment1_outputs(path):
-  contagion_types = [ 'distance', 'simple', 'complex' ]
+  contagion_types = [ 'cognitive', 'simple', 'complex' ]
   message_files = [ '50-50', 'default', 'gradual' ]
   for ct in contagion_types:
     for mf in message_files:
