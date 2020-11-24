@@ -359,6 +359,7 @@ def process_multi_chart_data(path, filename='percent-agent-beliefs', show_plot=F
   plot = plot_nlogo_multi_chart(props, multi_data)
   plt.savefig(f'{path}/aggregate-chart.png')
   if show_plot: plt.show()
+  plt.close()
   return plot
 
 '''
@@ -387,13 +388,13 @@ def plot_nlogo_multi_chart(props, multi_data):
   # series = pd.Series(data)
   fig, (ax) = plt.subplots(1, figsize=(8,6))
   # ax, ax2 = fig.add_subplot(2)
-  ax.set_ylim([0, 1])
+  ax.set_ylim([0, 1.1])
   y_min = int(props['y min'])
   y_max = int(props['y max'])
   x_min = int(props['x min'])
   x_max = int(props['x max'])
-  plt.yticks(np.arange(y_min, y_max, step=0.2))
-  plt.xticks(np.arange(x_min, x_max, step=10))
+  plt.yticks(np.arange(y_min, y_max+0.2, step=0.2))
+  plt.xticks(np.arange(x_min, x_max+10, step=10))
 
   means = { key: [] for key in multi_data[0].keys() }
   line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
