@@ -211,7 +211,7 @@ def nlogo_parse_chunk(chunk):
 FILE I/O
 '''
 
-DATA_DIR = 'D:/school/grad-school/Tufts/research/cognitive-contagion/'
+DATA_DIR = 'D:/school/grad-school/Tufts/research/cognitive-contagion'
 
 def save_graph(path, cit, cit_social, media, media_sub):
     cit_arr = nlogo_list_to_arr(nlogo_replace_agents(cit, [ 'citizen' ]))
@@ -363,18 +363,24 @@ def process_multi_chart_data(path, filename='percent-agent-beliefs', show_plot=F
   return plot
 
 '''
-Process charts for experiment 1: the experiment where one media agent
-tries to sway the entire population. It runs each contagion type for
+Process charts for the simple-complex comparison: the experiment where one
+media agent tries to sway the entire population. It runs each contagion type for
 each of three message files 10 times. This creates aggregate charts
 for each of the 6 combinations.
 '''
-def process_experiment1_outputs(path):
-  contagion_types = [ 'cognitive', 'simple', 'complex' ]
+def process_simple_complex_exp_outputs(path):
+  contagion_types = [ 'simple', 'complex' ]
   message_files = [ '50-50', 'default', 'gradual' ]
   for ct in contagion_types:
     for mf in message_files:
       process_multi_chart_data(f'{path}/{ct}/{mf}', 'percent-agent-beliefs')
 
+def process_cognitive_exp_outputs(path):
+  cognitive_fns = [ 'linear-mid', 'linear-gullible', 'linear-stubborn', 'sigmoid-gullible', 'sigmoid-mid', 'sigmoid-stubborn' ]
+  message_files = [ '50-50', 'default', 'gradual' ]
+  for cf in cognitive_fns:
+    for mf in message_files:
+      process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}', 'percent-agent-beliefs')
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot
 each data set and then draw a line of the means at each point through the
@@ -395,6 +401,8 @@ def plot_nlogo_multi_chart(props, multi_data):
   x_max = int(props['x max'])
   plt.yticks(np.arange(y_min, y_max+0.2, step=0.2))
   plt.xticks(np.arange(x_min, x_max+10, step=10))
+  ax.set_ylabel("% of agents who believe a")
+  ax.set_xlabel("Time step")
 
   means = { key: [] for key in multi_data[0].keys() }
   line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
@@ -414,6 +422,7 @@ def plot_nlogo_multi_chart(props, multi_data):
   for key in means:
     mean_vec = means[key].mean(0)
     var_vec = means[key].var(0)
+    # print(var_vec)
     ax.plot(mean_vec, c=line_color(key))
     ax.fill_between(range(x_min, len(mean_vec)), mean_vec-var_vec, mean_vec+var_vec, facecolor=f'{line_color(key)}44')
   

@@ -17,7 +17,7 @@ def plot_and_save_histogram(data, title, path, bar_tfm_fn=lambda x: x):
   freq = [ bar_tfm_fn(len(list(group))) for key, group in groupby(sorted_rounded_data) ]
   freq_series = pd.Series(freq)
 
-  plt.figure(figsize=(8,6))
+  plt.figure(figsize=(8,8))
   ax = freq_series.plot(kind='bar')
   ax.set_title(title)
   ax.set_xticklabels(sorted(data_vals), fontsize=6)

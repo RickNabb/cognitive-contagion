@@ -9,10 +9,6 @@ globals [
   citizen-priors
   citizen-malleables
 
-  ;; SIR
-  Nk
-  kronecker_g
-
   ;; For experiments
   contagion-dir
 ]
@@ -44,6 +40,8 @@ to setup
   clear-all
   set-default-shape turtles "circle"
   set-default-shape medias "box"
+
+  ;; Python imports and setup
   py:setup "python"
   py:run "import sys"
   py:run "import os"
@@ -51,8 +49,8 @@ to setup
   py:run "from data import *"
   py:run "from messaging import *"
   py:run "import mag as MAG"
+  py:run "from nlogo_graphs import *"
 
-  set Nk array_shape seed ^ k
   set citizen-priors []
   set citizen-malleables [ "Attributes.A" ]
 
@@ -62,18 +60,16 @@ to setup
 
   ifelse not load-graph? [
     create-agents
-
-    set kronecker_g kronecker_pow seed k
-
-    set mag-g mag
-    connect_mag
-    connect_media
+    connect-agents
+    connect-media
   ] [
     read-graph
   ]
 
+  ;; Load message data sets to be used by the influencer agents
   set messages-over-time load-messages-over-time (word messages-data-path "/" message-file ".json")
 
+  ;; Layout turtles
   let max_turtle max-one-of turtles [ count social-friend-neighbors ]
   repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
   ask turtles with [ count social-friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
@@ -81,6 +77,58 @@ to setup
   layout
 
   reset-ticks
+end
+
+;; For runs of the cognitive contagion simulations, set function parameters according to the type of
+;; function being used.
+to set-cognitive-contagion-params
+  if cognitive-fn = "linear-gullible" [
+    set cognitive-scalar? true
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-scalar 0
+    set cognitive-translate 1
+  ]
+  if cognitive-fn = "linear-mid" [
+    set cognitive-scalar? true
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-scalar 1
+    set cognitive-translate 1
+  ]
+  if cognitive-fn = "linear-stubborn" [
+    set cognitive-scalar? true
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-scalar 20
+    set cognitive-translate 10
+  ]
+  ;; Threshold t
+  let t 1
+  if cognitive-fn = "sigmoid-gullible" [
+    set t 6
+    set cognitive-scalar? false
+    set cognitive-exponent? true
+    set cognitive-translate? true
+    set cognitive-exponent 1
+    set cognitive-translate t + 1
+  ]
+  if cognitive-fn = "sigmoid-mid" [
+    set t 2
+    set cognitive-scalar? false
+    set cognitive-exponent? true
+    set cognitive-translate? true
+    set cognitive-exponent 2
+    set cognitive-translate t + 1
+  ]
+  if cognitive-fn = "sigmoid-stubborn" [
+    set t 1
+    set cognitive-scalar? false
+    set cognitive-exponent? true
+    set cognitive-translate? true
+    set cognitive-exponent 4
+    set cognitive-translate t + 1
+  ]
 end
 
 to create-agents
@@ -107,7 +155,7 @@ end
 
 to create-citizenz
   let id 0
-  repeat Nk [
+  repeat N [
     create-citizen-dist id
     set id id + 1
   ]
@@ -143,6 +191,33 @@ to create-media
       setxy -4 1
       set color blue
       set idee "BEL"
+    ]
+  ]
+end
+
+;; Connect the agents in the simulation based on the graph type selected.
+to connect-agents
+  if graph-type = "erdos-renyi" [
+    let G er-graph N erdos-renyi-p
+    let edges (dict-value G "edges")
+    show(edges)
+    foreach edges [ ed ->
+      let end-1 (item 0 ed)
+      let end-2 (item 1 ed)
+      ask citizen end-1 [ create-social-friend-with citizen end-2 ]
+    ]
+  ]
+end
+
+to connect-media
+  let u 0
+  ask medias [
+    let m self
+    ask citizens [
+      let t self
+      if dist-to-agent-brain brain ([media-attrs] of m) <= epsilon [
+        create-subscriber-from m
+      ]
     ]
   ]
 end
@@ -226,11 +301,11 @@ to receive-message [ cit sender message message-id ]
         if cognitive-exponent? [ set expon cognitive-exponent ]
         if cognitive-translate? [ set trans cognitive-translate ]
 
-        ;; Good values for l2:
-        if cognitive-fn = "l2" [ set p 1 / (1 + (scalar * dist + trans) ^ expon) ]
+        ;; Good values for linear:
+        if member? "linear" cognitive-fn [ set p 1 / (trans + (scalar * dist) ^ expon) ]
 
         ;; Good values for sigmoid: expon = -4, trans = -5 (works like old threshold function)
-        if cognitive-fn = "sigmoid" [ set p (1 / (1 + (exp (-1 * expon * dist + trans)))) ]
+        if member? "sigmoid" cognitive-fn [ set p (1 / (1 + (exp (expon * (dist - trans))))) ]
 ;        show (word "dist: " dist)
 ;        show (word self ": " (dict-value brain "A") " " message " (p=" p ")")
 
@@ -370,7 +445,7 @@ to read-graph
   ]
 
   ;; Fudging media connections too since epsilon may not want to change between runs
-  connect_media
+  connect-media
 end
 
 ;;;;;;;;;;;;;
@@ -450,39 +525,6 @@ to layout
   ] [ ask social-friends [ make-link-transparent ] ]
 end
 
-;;;;;;;;;;;;;;;;;
-;; KRONECKER PROCS
-;;;;;;;;;;;;;;;;;
-
-;;; Take the Kronecker power of a given graph represented by matrix
-;;; g to the power k.
-;;;
-;;; param g: Must be a string representation of a python array
-;;; param k: An integer to raise the graph to the Kronecker power of
-to-report kronecker_pow [g pow]
-  report py:runresult(
-    word "kron.kronecker_pow(kron.np.array(" g "), " pow ")"
-  )
-end
-
-to connect_kronecker
-  let u 0
-  let v 0
-  foreach kronecker_g [ row ->
-     set v 0
-     foreach row [ el ->
-      let rand random-float 1
-      if (el > rand) and (u != v) [
-        ;show(word "Linking turtle " u " with " v)
-;        ask citizen u [ create-friend-with citizen v ]
-;        ask citizen u [ create-seeing-with citizen v ]
-      ]
-      set v v + 1
-    ]
-    set u u + 1
-  ]
-end
-
 ;;;;;;;;;;;;;;;
 ; MAG PROCS
 ;;;;;;;;;;;;;;;
@@ -490,7 +532,7 @@ end
 ;;; Run a political MAG function in the python script.
 to-report mag
   report py:runresult(
-    word "MAG.attr_mag(" Nk "," (list-as-py-array citizen-malleables false) ")"
+    word "MAG.attr_mag(" N "," (list-as-py-array citizen-malleables false) ")"
   )
 end
 
@@ -508,19 +550,6 @@ to connect_mag
       set v v + 1
     ]
     set u u + 1
-  ]
-end
-
-to connect_media
-  let u 0
-  ask medias [
-    let m self
-    ask citizens [
-      let t self
-      if dist-to-agent-brain brain ([media-attrs] of m) <= epsilon [
-        create-subscriber-from m
-      ]
-    ]
   ]
 end
 
@@ -551,7 +580,7 @@ end
 
 to-report create-agent-brain [ id prior-attrs malleable-attrs prior-vals malleable-vals ]
   report py:runresult(
-    word "create_agent_brain(" id "," (list-as-py-array prior-attrs false) "," (list-as-py-array malleable-attrs false) "," (list-as-py-array prior-vals false) ", " (list-as-py-array malleable-vals false) ",'" brain-type "'," beta ", " threshold "," alpha ")"
+    word "create_agent_brain(" id "," (list-as-py-array prior-attrs false) "," (list-as-py-array malleable-attrs false) "," (list-as-py-array prior-vals false) ", " (list-as-py-array malleable-vals false) ",'" brain-type "',1, " threshold ",1)"
   )
 end
 
@@ -607,6 +636,15 @@ end
 
 to-report infectiousness-duration
   report py:runresult("infectiousness_duration")
+end
+
+;; Create an Erdos-Renyi graph with the NetworkX package in python
+;; @param m - The number of nodes for the graph (since N is a global variable)
+;; @param p - The probability of two random nodes connecting.
+;; @reports A dictionary [ ['nodes' nodes] ['edges' edges] ] where nodes is a list
+;; of single values, and edges is a list of two-element lists (indicating nodes).
+to-report er-graph [m p]
+  report py:runresult((word "ER_graph(" m "," p ")"))
 end
 
 ;;;;;;;;;;;;;;;
@@ -884,46 +922,6 @@ NIL
 NIL
 1
 
-TEXTBOX
-1918
-25
-2068
-109
-KEY:\nCircle = Very Liberal\nStar = Liberal\nTriangle = Moderate\nPentagon = Conservative\nSquare = Very Conservative
-11
-0.0
-1
-
-TEXTBOX
-1922
-135
-2072
-153
-BLUE = Democrat
-11
-105.0
-1
-
-TEXTBOX
-1921
-150
-2071
-168
-PURPLE = Independent
-11
-114.0
-1
-
-TEXTBOX
-1921
-168
-2071
-186
-RED = Republican
-11
-15.0
-1
-
 BUTTON
 172
 56
@@ -1048,48 +1046,11 @@ NIL
 NIL
 0
 
-SWITCH
-20
-507
-153
-540
-uniform-beta?
-uniform-beta?
-0
-1
--1000
-
-SWITCH
-574
-507
-733
-540
-uniform-threshold?
-uniform-threshold?
-0
-1
--1000
-
 SLIDER
-20
-467
-192
-500
-beta
-beta
-0
-5
-2.0
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-574
-467
-704
-500
+203
+475
+333
+508
 threshold
 threshold
 0
@@ -1101,10 +1062,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-389
-467
-561
-500
+18
+475
+190
+508
 epsilon
 epsilon
 0
@@ -1143,56 +1104,21 @@ NIL
 NIL
 1
 
-SLIDER
-205
-467
-377
-500
-alpha
-alpha
-0
-5
-1.0
-0.1
-1
-NIL
-HORIZONTAL
-
 TEXTBOX
-583
-52
-733
-70
+310
+49
+460
+67
 Number of citizens
 11
 0.0
 1
 
 TEXTBOX
-20
-450
-170
-468
-Threshold to believe messages
-11
-0.0
-1
-
-TEXTBOX
-207
-447
-357
-465
-Threshold to share messages
-11
-0.0
-1
-
-TEXTBOX
-390
-447
-556
-475
+18
+455
+184
+483
 Threshold to subscribe to media
 11
 0.0
@@ -1209,20 +1135,20 @@ Citizen Parameters
 1
 
 TEXTBOX
-583
-18
-733
-36
+310
+15
+460
+33
 Simulation Parameters
 14
 0.0
 1
 
 TEXTBOX
-575
-444
-740
-472
+203
+453
+368
+481
 Tokens needed to change belief
 11
 0.0
@@ -1249,16 +1175,16 @@ Simulation State Plots
 1
 
 SLIDER
-582
-80
-754
-113
-k
-k
+309
+77
+481
+110
+N
+N
 0
+500
+250.0
 10
-5.0
-1
 1
 NIL
 HORIZONTAL
@@ -1281,7 +1207,7 @@ SWITCH
 126
 show-social-friends?
 show-social-friends?
-1
+0
 1
 -1000
 
@@ -1324,20 +1250,20 @@ Aggregate Charts
 1
 
 TEXTBOX
-26
-619
-214
-642
+538
+418
+726
+441
 Macro Parameters
 10
 0.0
 1
 
 CHOOSER
-557
-715
-699
-760
+309
+609
+451
+654
 spread-type
 spread-type
 "simple" "complex" "cognitive"
@@ -1354,21 +1280,21 @@ Display
 1
 
 SWITCH
-28
-652
-147
-685
+540
+450
+659
+483
 load-graph?
 load-graph?
-0
+1
 1
 -1000
 
 INPUTBOX
-20
-709
-235
-769
+532
+508
+747
+568
 load-graph-path
 ./exp1-graph.csv
 1
@@ -1404,14 +1330,14 @@ NIL
 1
 
 CHOOSER
-266
-715
-405
-760
+18
+609
+160
+654
 cognitive-fn
 cognitive-fn
-"l2" "sigmoid"
-0
+"linear-gullible" "linear-stubborn" "linear-mid" "sigmoid-gullible" "sigmoid-stubborn" "sigmoid-mid"
+4
 
 SLIDER
 24
@@ -1444,10 +1370,10 @@ NIL
 HORIZONTAL
 
 CHOOSER
-410
-715
-549
-760
+162
+609
+301
+654
 brain-type
 brain-type
 "discrete" "continuous"
@@ -1515,17 +1441,6 @@ message-repeats
 NIL
 HORIZONTAL
 
-INPUTBOX
-582
-125
-807
-215
-seed
-[[0.6,0.26,0.24],\n  [0.40,0.2,0.4],\n  [0.21,0.24,0.65]]
-1
-0
-String
-
 PLOT
 847
 175
@@ -1580,13 +1495,13 @@ CHOOSER
 message-file
 message-file
 "default" "50-50" "gradual"
-0
+1
 
 SWITCH
-585
-224
-719
-258
+312
+122
+446
+155
 media-agents?
 media-agents?
 0
@@ -1594,40 +1509,40 @@ media-agents?
 -1000
 
 SLIDER
-268
-804
-441
-838
+20
+699
+193
+732
 cognitive-exponent
 cognitive-exponent
 -10
 10
--4.0
+4.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-268
-765
-441
-799
+20
+659
+193
+692
 cognitive-scalar
 cognitive-scalar
 -20
 20
--5.0
+4.0
 1
 1
 NIL
 HORIZONTAL
 
 SWITCH
-448
-765
-593
-799
+200
+659
+345
+692
 cognitive-scalar?
 cognitive-scalar?
 0
@@ -1635,10 +1550,10 @@ cognitive-scalar?
 -1000
 
 SWITCH
-449
-807
-614
-841
+202
+702
+367
+735
 cognitive-exponent?
 cognitive-exponent?
 0
@@ -1646,30 +1561,65 @@ cognitive-exponent?
 -1000
 
 SLIDER
-267
-849
-440
-883
+19
+744
+192
+777
 cognitive-translate
 cognitive-translate
 -10
 10
--5.0
+1.0
 1
 1
 NIL
 HORIZONTAL
 
 SWITCH
-450
-850
-613
-884
+202
+744
+365
+777
 cognitive-translate?
 cognitive-translate?
 0
 1
 -1000
+
+TEXTBOX
+22
+533
+210
+556
+Contagion Parameters
+11
+0.0
+1
+
+CHOOSER
+499
+78
+638
+123
+graph-type
+graph-type
+"erdos-renyi" "watts-strogatz" "barabasi-albert" "mag" "facebook"
+0
+
+SLIDER
+498
+125
+671
+159
+erdos-renyi-p
+erdos-renyi-p
+0
+1
+0.05
+0.01
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -2018,7 +1968,7 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="experiment-1" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
+  <experiment name="simple-complex-experiment" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
     <setup>setup
 let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe))
 set contagion-dir (word run-dir "/" spread-type "/" message-file)
@@ -2033,7 +1983,34 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
     <enumeratedValueSet variable="spread-type">
       <value value="&quot;simple&quot;"/>
       <value value="&quot;complex&quot;"/>
-      <value value="&quot;cognitive&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="message-file">
+      <value value="&quot;default&quot;"/>
+      <value value="&quot;50-50&quot;"/>
+      <value value="&quot;gradual&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="cognitive-exp" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
+    <setup>setup
+set-cognitive-contagion-params
+let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe))
+set contagion-dir (word run-dir "/" spread-type "/" message-file "/" cognitive-fn)
+py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
+py:run (word "if not os.path.isdir('" run-dir "/" spread-type "'): os.mkdir('" run-dir "/" spread-type "')")
+py:run (word "if not os.path.isdir('" run-dir "/" spread-type "/" message-file "'): os.mkdir('" run-dir "/" spread-type "/" message-file "')")
+py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-dir "')")</setup>
+    <go>go</go>
+    <final>let rand random 10000
+export-world (word contagion-dir "/" rand "_world.csv")
+export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent-beliefs.csv")</final>
+    <metric>count turtles</metric>
+    <enumeratedValueSet variable="cognitive-fn">
+      <value value="&quot;sigmoid-gullible&quot;"/>
+      <value value="&quot;sigmoid-mid&quot;"/>
+      <value value="&quot;sigmoid-stubborn&quot;"/>
+      <value value="&quot;linear-mid&quot;"/>
+      <value value="&quot;linear-gullible&quot;"/>
+      <value value="&quot;linear-stubborn&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="message-file">
       <value value="&quot;default&quot;"/>
