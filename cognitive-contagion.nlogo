@@ -78,6 +78,9 @@ to setup
   if graph-type = "watts-strogatz" [
     layout-circle sort citizens 12
   ]
+  if graph-type = "barabasi-albert" [
+    layout-radial citizens social-friends max_turtle
+  ]
 
   layout
 
@@ -208,6 +211,9 @@ to connect-agents
   ]
   if graph-type = "watts-strogatz" [
     set G ws-graph N watts-strogatz-k watts-strogatz-p
+  ]
+  if graph-type = "barabasi-albert" [
+    set G ba-graph N ba-m
   ]
 
   let edges (dict-value G "edges")
@@ -649,22 +655,31 @@ to-report infectiousness-duration
 end
 
 ;; Create an Erdos-Renyi graph with the NetworkX package in python
-;; @param m - The number of nodes for the graph (since N is a global variable)
+;; @param en - The number of nodes for the graph (since N is a global variable)
 ;; @param p - The probability of two random nodes connecting.
 ;; @reports A dictionary [ ['nodes' nodes] ['edges' edges] ] where nodes is a list
 ;; of single values, and edges is a list of two-element lists (indicating nodes).
-to-report er-graph [m p]
-  report py:runresult((word "ER_graph(" m "," p ")"))
+to-report er-graph [en p]
+  report py:runresult((word "ER_graph(" en "," p ")"))
 end
 
 ;; Create a Watts-Strogatz graph with the NetworkX package in python
-;; @param m - The number of nodes for the graph (since N is a global variable)
+;; @param en - The number of nodes for the graph (since N is a global variable)
 ;; @param k - The number of neighbors to initially connect to.
 ;; @param p - The probability of an edge rewiring.
 ;; @reports A dictionary [ ['nodes' nodes] ['edges' edges] ] where nodes is a list
 ;; of single values, and edges is a list of two-element lists (indicating nodes).
-to-report ws-graph [m k p]
-  report py:runresult((word "WS_graph(" m "," k "," p ")"))
+to-report ws-graph [en k p]
+  report py:runresult((word "WS_graph(" en "," k "," p ")"))
+end
+
+;; Create a Barabasi-Albert graph with the NetworkX package in python
+;; @param en - The number of nodes for the graph (since N is a global variable)
+;; @param m - The number of edges to connect with when a node is added.
+;; @reports A dictionary [ ['nodes' nodes] ['edges' edges] ] where nodes is a list
+;; of single values, and edges is a list of two-element lists (indicating nodes).
+to-report ba-graph [en m]
+  report py:runresult((word "BA_graph(" en "," m ")"))
 end
 
 ;;;;;;;;;;;;;;;
@@ -899,10 +914,10 @@ to-report date-time-safe
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-1276
-20
-1905
-650
+1162
+13
+1791
+643
 -1
 -1
 18.82
@@ -977,10 +992,10 @@ NIL
 1
 
 PLOT
-849
-562
-1246
-755
+728
+392
+1125
+585
 A Histogram
 A Value
 Number of Agents
@@ -995,10 +1010,10 @@ PENS
 "default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -4 4\n\nhistogram [dict-value brain \"A\"] of citizens"
 
 MONITOR
-847
-763
-905
-808
+725
+593
+783
+638
 -3
 count citizens with [dict-value brain \"A\" = -3]
 1
@@ -1006,10 +1021,10 @@ count citizens with [dict-value brain \"A\" = -3]
 11
 
 MONITOR
-904
-763
-961
-808
+783
+593
+840
+638
 -2
 count citizens with [dict-value brain \"A\" = -2]
 1
@@ -1017,10 +1032,10 @@ count citizens with [dict-value brain \"A\" = -2]
 11
 
 MONITOR
-967
-763
-1033
-808
+845
+593
+911
+638
 -1
 count citizens with [dict-value brain \"A\" = -1]
 1
@@ -1028,10 +1043,10 @@ count citizens with [dict-value brain \"A\" = -1]
 11
 
 MONITOR
-1038
-763
-1088
-808
+917
+593
+967
+638
 0
 count citizens with [dict-value brain \"A\" = 0]
 1
@@ -1039,10 +1054,10 @@ count citizens with [dict-value brain \"A\" = 0]
 11
 
 MONITOR
-1095
-763
-1145
-808
+973
+593
+1023
+638
 1
 count citizens with [dict-value brain \"A\" = 1]
 1
@@ -1067,10 +1082,10 @@ NIL
 0
 
 SLIDER
-564
-813
-694
-846
+510
+750
+640
+783
 threshold
 threshold
 0
@@ -1097,10 +1112,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-830
-52
-1027
-85
+298
+58
+495
+91
 show-media-connections?
 show-media-connections?
 0
@@ -1145,32 +1160,12 @@ Threshold to subscribe to media
 1
 
 TEXTBOX
-20
-639
-170
-657
-Citizen Parameters
-14
-0.0
-1
-
-TEXTBOX
 25
 144
 175
 162
 Simulation Parameters
 14
-0.0
-1
-
-TEXTBOX
-564
-790
-729
-818
-Tokens needed to change belief
-11
 0.0
 1
 
@@ -1185,10 +1180,10 @@ Simulation Controls
 1
 
 TEXTBOX
-852
-505
-1002
-523
+730
+334
+880
+352
 Simulation State Plots
 14
 0.0
@@ -1203,17 +1198,17 @@ N
 N
 0
 500
-80.0
+240.0
 10
 1
 NIL
 HORIZONTAL
 
 SWITCH
-1033
-52
-1207
-85
+502
+58
+676
+91
 show-citizen-political?
 show-citizen-political?
 0
@@ -1221,10 +1216,10 @@ show-citizen-political?
 -1000
 
 SWITCH
-832
-93
-999
-126
+300
+99
+467
+132
 show-social-friends?
 show-social-friends?
 0
@@ -1232,20 +1227,20 @@ show-social-friends?
 -1000
 
 TEXTBOX
-850
-532
-1000
-550
+728
+362
+878
+380
 Cognitive State
 11
 0.0
 1
 
 PLOT
-1933
-258
-2202
-493
+723
+689
+992
+924
 Social Friend Degree of Nodes
 NIL
 NIL
@@ -1260,40 +1255,30 @@ PENS
 "default" 1.0 1 -16777216 true "" "set-plot-x-range 0 (max [count social-friend-neighbors] of citizens) + 1\nhistogram [count social-friend-neighbors] of citizens"
 
 TEXTBOX
-1926
-215
-2114
-238
+719
+658
+907
+681
 Aggregate Charts
 13
 0.0
 1
 
-TEXTBOX
-534
-618
-722
-641
-Macro Parameters
-10
-0.0
-1
-
 CHOOSER
 309
-755
+792
 451
-800
+837
 spread-type
 spread-type
 "simple" "complex" "cognitive"
 2
 
 TEXTBOX
-833
-29
-1021
-52
+302
+35
+490
+58
 Display
 11
 0.0
@@ -1322,10 +1307,10 @@ load-graph-path
 String
 
 INPUTBOX
-938
-889
-1153
-949
+27
+475
+242
+535
 save-graph-path
 ./exp1-graph.csv
 1
@@ -1333,10 +1318,10 @@ save-graph-path
 String
 
 BUTTON
-174
-100
-271
-134
+173
+97
+270
+131
 Save Graph
 save-graph
 NIL
@@ -1351,9 +1336,9 @@ NIL
 
 CHOOSER
 18
-755
+792
 160
-800
+837
 cognitive-fn
 cognitive-fn
 "linear-gullible" "linear-stubborn" "linear-mid" "sigmoid-gullible" "sigmoid-stubborn" "sigmoid-mid"
@@ -1361,9 +1346,9 @@ cognitive-fn
 
 SLIDER
 22
-702
+738
 196
-735
+771
 simple-spread-chance
 simple-spread-chance
 0
@@ -1376,9 +1361,9 @@ HORIZONTAL
 
 SLIDER
 207
-702
+738
 381
-735
+771
 complex-spread-ratio
 complex-spread-ratio
 0
@@ -1391,9 +1376,9 @@ HORIZONTAL
 
 CHOOSER
 162
-755
+792
 301
-800
+837
 brain-type
 brain-type
 "discrete" "continuous"
@@ -1415,10 +1400,10 @@ NIL
 HORIZONTAL
 
 INPUTBOX
-1164
-892
-1481
-954
+209
+177
+526
+239
 sim-output-dir
 D:/school/grad-school/Tufts/research/cognitive-contagion/simulation-data/
 1
@@ -1427,9 +1412,9 @@ String
 
 INPUTBOX
 23
-500
+580
 471
-575
+655
 messages-data-path
 D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data
 1
@@ -1438,9 +1423,9 @@ String
 
 TEXTBOX
 23
-479
+559
 238
-505
+585
 Message Parameters
 11
 0.0
@@ -1448,9 +1433,9 @@ Message Parameters
 
 SLIDER
 23
-579
+659
 196
-612
+692
 message-repeats
 message-repeats
 0
@@ -1462,10 +1447,10 @@ NIL
 HORIZONTAL
 
 PLOT
-847
-175
-1221
-463
+732
+24
+1106
+312
 percent-agent-beliefs
 Steps
 % of Agents
@@ -1486,10 +1471,10 @@ PENS
 "-3" 1.0 0 -10873583 true "" "plot (count citizens with [ dict-value brain \"A\" = -3 ]) / (count citizens)"
 
 MONITOR
-1150
-763
-1208
-808
+1028
+593
+1086
+638
 2
 count citizens with [dict-value brain \"A\" = 2]
 17
@@ -1497,10 +1482,10 @@ count citizens with [dict-value brain \"A\" = 2]
 11
 
 MONITOR
-1212
-763
-1270
-808
+1090
+593
+1148
+638
 3
 count citizens with [dict-value brain \"A\" = 3]
 17
@@ -1509,13 +1494,13 @@ count citizens with [dict-value brain \"A\" = 3]
 
 CHOOSER
 478
-505
+585
 617
-550
+630
 message-file
 message-file
 "default" "50-50" "gradual"
-1
+0
 
 SWITCH
 27
@@ -1530,9 +1515,9 @@ media-agents?
 
 SLIDER
 20
-845
+882
 193
-878
+915
 cognitive-exponent
 cognitive-exponent
 -10
@@ -1545,9 +1530,9 @@ HORIZONTAL
 
 SLIDER
 20
-805
+842
 193
-838
+875
 cognitive-scalar
 cognitive-scalar
 -20
@@ -1560,9 +1545,9 @@ HORIZONTAL
 
 SWITCH
 200
-805
+842
 345
-838
+875
 cognitive-scalar?
 cognitive-scalar?
 0
@@ -1571,9 +1556,9 @@ cognitive-scalar?
 
 SWITCH
 202
-848
+884
 367
-881
+917
 cognitive-exponent?
 cognitive-exponent?
 0
@@ -1582,9 +1567,9 @@ cognitive-exponent?
 
 SLIDER
 19
-890
+927
 192
-923
+960
 cognitive-translate
 cognitive-translate
 -10
@@ -1597,9 +1582,9 @@ HORIZONTAL
 
 SWITCH
 202
-890
+927
 365
-923
+960
 cognitive-translate?
 cognitive-translate?
 0
@@ -1608,9 +1593,9 @@ cognitive-translate?
 
 TEXTBOX
 22
-679
+715
 210
-702
+738
 Contagion Parameters
 11
 0.0
@@ -1624,7 +1609,7 @@ CHOOSER
 graph-type
 graph-type
 "erdos-renyi" "watts-strogatz" "barabasi-albert" "mag" "facebook"
-1
+2
 
 SLIDER
 437
@@ -1670,7 +1655,7 @@ watts-strogatz-p
 watts-strogatz-p
 0
 1
-0.1
+0.5
 0.01
 1
 NIL
@@ -1685,11 +1670,36 @@ watts-strogatz-k
 watts-strogatz-k
 0
 N - 1
+7.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+435
+483
+560
+517
+ba-m
+ba-m
+0
+20
 2.0
 1
 1
 NIL
 HORIZONTAL
+
+TEXTBOX
+437
+460
+625
+483
+Barabasi-Albert (ba)
+11
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?

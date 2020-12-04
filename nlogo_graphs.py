@@ -17,8 +17,25 @@ def ER_graph(n, p):
   G = nx.erdos_renyi_graph(n, p)
   return nlogo_safe_nodes_edges(G)
 
+'''
+Return a Netlogo-safe Watts-Strogatz graph from the NetworkX package.
+
+:param n: The number of nodes.
+:param k: The number of initial neighbors.
+:param p: The probability of an edge rewiring.
+'''
 def WS_graph(n, k, p):
   G = nx.watts_strogatz_graph(n, k, p)
+  return nlogo_safe_nodes_edges(G)
+
+'''
+Return a Netlogo-safe Barabasi-Albert graph from the NetworkX package.
+
+:param n: The number of nodes.
+:param m: The number of edges to connect with when a node is added.
+'''
+def BA_graph(n, m):
+  G = nx.barabasi_albert_graph(n, m)
   return nlogo_safe_nodes_edges(G)
 
 '''
