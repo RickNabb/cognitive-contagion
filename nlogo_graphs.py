@@ -15,6 +15,18 @@ Return a NetLogo-safe Erdos-Renyi graph from the NetworkX package.
 '''
 def ER_graph(n, p):
   G = nx.erdos_renyi_graph(n, p)
+  return nlogo_safe_nodes_edges(G)
+
+def WS_graph(n, k, p):
+  G = nx.watts_strogatz_graph(n, k, p)
+  return nlogo_safe_nodes_edges(G)
+
+'''
+Return NetLogo-safe graph structures.
+
+:param G: The networkx graph to convert.
+'''
+def nlogo_safe_nodes_edges(G):
   nodes = list(G.nodes)
   edges = [ [e[0], e[1]] for e in G.edges ]
   return { 'nodes': nodes, 'edges': edges }

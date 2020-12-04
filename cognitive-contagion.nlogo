@@ -71,8 +71,13 @@ to setup
 
   ;; Layout turtles
   let max_turtle max-one-of turtles [ count social-friend-neighbors ]
-  repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
-  ask turtles with [ count social-friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
+  if graph-type = "erdos-renyi" [
+    repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
+    ask turtles with [ count social-friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
+  ]
+  if graph-type = "watts-strogatz" [
+    layout-circle sort citizens 12
+  ]
 
   layout
 
@@ -197,16 +202,21 @@ end
 
 ;; Connect the agents in the simulation based on the graph type selected.
 to connect-agents
+  let G -1
   if graph-type = "erdos-renyi" [
-    let G er-graph N erdos-renyi-p
-    let edges (dict-value G "edges")
+    set G er-graph N erdos-renyi-p
+  ]
+  if graph-type = "watts-strogatz" [
+    set G ws-graph N watts-strogatz-k watts-strogatz-p
+  ]
+
+  let edges (dict-value G "edges")
     show(edges)
     foreach edges [ ed ->
       let end-1 (item 0 ed)
       let end-2 (item 1 ed)
       ask citizen end-1 [ create-social-friend-with citizen end-2 ]
     ]
-  ]
 end
 
 to connect-media
@@ -647,6 +657,16 @@ to-report er-graph [m p]
   report py:runresult((word "ER_graph(" m "," p ")"))
 end
 
+;; Create a Watts-Strogatz graph with the NetworkX package in python
+;; @param m - The number of nodes for the graph (since N is a global variable)
+;; @param k - The number of neighbors to initially connect to.
+;; @param p - The probability of an edge rewiring.
+;; @reports A dictionary [ ['nodes' nodes] ['edges' edges] ] where nodes is a list
+;; of single values, and edges is a list of two-element lists (indicating nodes).
+to-report ws-graph [m k p]
+  report py:runresult((word "WS_graph(" m "," k "," p ")"))
+end
+
 ;;;;;;;;;;;;;;;
 ; HELPER PROCS
 ;;;;;;;;;;;;;;;
@@ -1047,10 +1067,10 @@ NIL
 0
 
 SLIDER
-203
-475
-333
-508
+564
+813
+694
+846
 threshold
 threshold
 0
@@ -1062,10 +1082,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-18
-475
-190
-508
+172
+277
+344
+310
 epsilon
 epsilon
 0
@@ -1105,20 +1125,20 @@ NIL
 1
 
 TEXTBOX
-310
-49
-460
-67
+27
+345
+177
+363
 Number of citizens
 11
 0.0
 1
 
 TEXTBOX
-18
-455
-184
-483
+172
+257
+338
+285
 Threshold to subscribe to media
 11
 0.0
@@ -1126,29 +1146,29 @@ Threshold to subscribe to media
 
 TEXTBOX
 20
-420
+639
 170
-438
+657
 Citizen Parameters
 14
 0.0
 1
 
 TEXTBOX
-310
-15
-460
-33
+25
+144
+175
+162
 Simulation Parameters
 14
 0.0
 1
 
 TEXTBOX
-203
-453
-368
-481
+564
+790
+729
+818
 Tokens needed to change belief
 11
 0.0
@@ -1175,15 +1195,15 @@ Simulation State Plots
 1
 
 SLIDER
-309
-77
-481
-110
+253
+369
+425
+402
 N
 N
 0
 500
-250.0
+80.0
 10
 1
 NIL
@@ -1250,10 +1270,10 @@ Aggregate Charts
 1
 
 TEXTBOX
-538
-418
-726
-441
+534
+618
+722
+641
 Macro Parameters
 10
 0.0
@@ -1261,9 +1281,9 @@ Macro Parameters
 
 CHOOSER
 309
-609
+755
 451
-654
+800
 spread-type
 spread-type
 "simple" "complex" "cognitive"
@@ -1280,10 +1300,10 @@ Display
 1
 
 SWITCH
-540
-450
-659
-483
+27
+370
+146
+403
 load-graph?
 load-graph?
 1
@@ -1291,10 +1311,10 @@ load-graph?
 -1000
 
 INPUTBOX
-532
-508
-747
-568
+25
+409
+240
+469
 load-graph-path
 ./exp1-graph.csv
 1
@@ -1302,10 +1322,10 @@ load-graph-path
 String
 
 INPUTBOX
-24
-187
-239
-247
+938
+889
+1153
+949
 save-graph-path
 ./exp1-graph.csv
 1
@@ -1331,19 +1351,19 @@ NIL
 
 CHOOSER
 18
-609
+755
 160
-654
+800
 cognitive-fn
 cognitive-fn
 "linear-gullible" "linear-stubborn" "linear-mid" "sigmoid-gullible" "sigmoid-stubborn" "sigmoid-mid"
 4
 
 SLIDER
-24
-564
-198
-597
+22
+702
+196
+735
 simple-spread-chance
 simple-spread-chance
 0
@@ -1355,10 +1375,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-209
-564
-383
-597
+207
+702
+381
+735
 complex-spread-ratio
 complex-spread-ratio
 0
@@ -1371,19 +1391,19 @@ HORIZONTAL
 
 CHOOSER
 162
-609
+755
 301
-654
+800
 brain-type
 brain-type
 "discrete" "continuous"
 0
 
 SLIDER
-24
-140
-198
-173
+25
+175
+199
+208
 tick-end
 tick-end
 30
@@ -1395,10 +1415,10 @@ NIL
 HORIZONTAL
 
 INPUTBOX
-251
-189
-568
-251
+1164
+892
+1481
+954
 sim-output-dir
 D:/school/grad-school/Tufts/research/cognitive-contagion/simulation-data/
 1
@@ -1406,10 +1426,10 @@ D:/school/grad-school/Tufts/research/cognitive-contagion/simulation-data/
 String
 
 INPUTBOX
-25
-285
-473
-360
+23
+500
+471
+575
 messages-data-path
 D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data
 1
@@ -1417,20 +1437,20 @@ D:/school/grad-school/Tufts/research/cognitive-contagion/messaging-data
 String
 
 TEXTBOX
-24
-263
-239
-289
+23
+479
+238
+505
 Message Parameters
 11
 0.0
 1
 
 SLIDER
-25
-363
-198
-396
+23
+579
+196
+612
 message-repeats
 message-repeats
 0
@@ -1488,20 +1508,20 @@ count citizens with [dict-value brain \"A\" = 3]
 11
 
 CHOOSER
-479
-290
-618
-335
+478
+505
+617
+550
 message-file
 message-file
 "default" "50-50" "gradual"
 1
 
 SWITCH
-312
-122
-446
-155
+27
+275
+161
+308
 media-agents?
 media-agents?
 0
@@ -1510,9 +1530,9 @@ media-agents?
 
 SLIDER
 20
-699
+845
 193
-732
+878
 cognitive-exponent
 cognitive-exponent
 -10
@@ -1525,9 +1545,9 @@ HORIZONTAL
 
 SLIDER
 20
-659
+805
 193
-692
+838
 cognitive-scalar
 cognitive-scalar
 -20
@@ -1540,9 +1560,9 @@ HORIZONTAL
 
 SWITCH
 200
-659
+805
 345
-692
+838
 cognitive-scalar?
 cognitive-scalar?
 0
@@ -1551,9 +1571,9 @@ cognitive-scalar?
 
 SWITCH
 202
-702
+848
 367
-735
+881
 cognitive-exponent?
 cognitive-exponent?
 0
@@ -1562,9 +1582,9 @@ cognitive-exponent?
 
 SLIDER
 19
-744
+890
 192
-777
+923
 cognitive-translate
 cognitive-translate
 -10
@@ -1577,9 +1597,9 @@ HORIZONTAL
 
 SWITCH
 202
-744
+890
 365
-777
+923
 cognitive-translate?
 cognitive-translate?
 0
@@ -1588,35 +1608,85 @@ cognitive-translate?
 
 TEXTBOX
 22
-533
+679
 210
-556
+702
 Contagion Parameters
 11
 0.0
 1
 
 CHOOSER
-499
-78
-638
-123
+255
+410
+394
+455
 graph-type
 graph-type
 "erdos-renyi" "watts-strogatz" "barabasi-albert" "mag" "facebook"
-0
+1
 
 SLIDER
-498
-125
-671
-159
+437
+369
+560
+403
 erdos-renyi-p
 erdos-renyi-p
 0
 1
 0.05
 0.01
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+25
+214
+213
+237
+Influencer Parameters
+11
+0.0
+1
+
+TEXTBOX
+28
+324
+216
+347
+Graph Parameters
+11
+0.0
+1
+
+SLIDER
+564
+369
+698
+403
+watts-strogatz-p
+watts-strogatz-p
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+565
+409
+692
+443
+watts-strogatz-k
+watts-strogatz-k
+0
+N - 1
+2.0
+1
 1
 NIL
 HORIZONTAL
