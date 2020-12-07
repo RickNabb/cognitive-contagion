@@ -136,8 +136,8 @@ LinearHeterophilicThetaRow = lambda row, l: HeterophilicThetaRow(row, l, 1, 2, 0
 AVals = [1, 1, 1, 1, 1, 1, 1]
 ADist = create_discrete_dist_sm(AVals)
 AMAGDefaultTheta = np.ones((7,7)) * 0.05
-AMAGHomophilicTheta = np.matrix([ HomophilicThetaRow(i, len(AVals), 2, 5, 0.5) for i in range(0, len(AVals)) ])
-AMAGHeterophilicTheta = np.matrix([ LinearHeterophilicThetaRow(i, len(AVals)) for i in range(0, len(AVals)) ])
+AMAGHomophilicTheta = np.matrix([ HomophilicThetaRow(i, len(AVals), 2, 50, 5) for i in range(0, len(AVals)) ])
+AMAGHeterophilicTheta = np.matrix([ HeterophilicThetaRow(i, len(AVals), 2, 5, 1) for i in range(0, len(AVals)) ])
 
 AttributeValues = {
   Attributes.A.name: {

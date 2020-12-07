@@ -64,9 +64,12 @@ to setup
 
   ;; Layout turtles
   let max_turtle max-one-of turtles [ count social-friend-neighbors ]
-  if graph-type = "erdos-renyi" or graph-type = "mag" [
+  if graph-type = "erdos-renyi" [
     ask turtles with [ count social-friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
-    repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
+    repeat 120 [ layout-spring turtles social-friends 0.3 10 2 ]
+  ]
+  if graph-type = "mag" [
+    repeat 120 [ layout-spring turtles social-friends 0.6 10 10 ]
   ]
   if graph-type = "watts-strogatz" [
     layout-circle sort citizens 12
@@ -1278,7 +1281,7 @@ N
 N
 0
 1000
-100.0
+250.0
 10
 1
 NIL
