@@ -71,15 +71,17 @@ to setup
 
   ;; Layout turtles
   let max_turtle max-one-of turtles [ count social-friend-neighbors ]
-  if graph-type = "erdos-renyi" [
-    repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
+  if graph-type = "erdos-renyi" or graph-type = "mag" [
     ask turtles with [ count social-friend-neighbors = 0 ] [ setxy random-xcor random-ycor ]
+    repeat 120 [ layout-spring turtles social-friends 0.3 10 1 ]
   ]
   if graph-type = "watts-strogatz" [
     layout-circle sort citizens 12
+    repeat 2 [ layout-spring citizens social-friends 0.3 10 1 ]
   ]
   if graph-type = "barabasi-albert" [
     layout-radial citizens social-friends max_turtle
+    layout-spring citizens social-friends 0.3 10 1
   ]
 
   layout
@@ -215,9 +217,11 @@ to connect-agents
   if graph-type = "barabasi-albert" [
     set G ba-graph N ba-m
   ]
+  if graph-type = "mag" [
+    set G mag N (list-as-py-array citizen-malleables false) mag-style
+  ]
 
   let edges (dict-value G "edges")
-    show(edges)
     foreach edges [ ed ->
       let end-1 (item 0 ed)
       let end-2 (item 1 ed)
@@ -542,34 +546,6 @@ to layout
 end
 
 ;;;;;;;;;;;;;;;
-; MAG PROCS
-;;;;;;;;;;;;;;;
-
-;;; Run a political MAG function in the python script.
-to-report mag
-  report py:runresult(
-    word "MAG.attr_mag(" N "," (list-as-py-array citizen-malleables false) ")"
-  )
-end
-
-to connect_mag
-  let u 0
-  let v 0
-  foreach mag-g [ row ->
-     set v 0
-     foreach row [ el ->
-      let rand random-float 1
-      if (el > rand) and (u != v) [
-        ;show(word "Linking turtle b/c el:" el " and rand " rand)
-        ask turtle u [ create-social-friend-with turtle v ]
-      ]
-      set v v + 1
-    ]
-    set u u + 1
-  ]
-end
-
-;;;;;;;;;;;;;;;
 ; PROCS TO MATCH
 ; PY MESSAGING FILE
 ;;;;;;;;;;;;;;;
@@ -680,6 +656,34 @@ end
 ;; of single values, and edges is a list of two-element lists (indicating nodes).
 to-report ba-graph [en m]
   report py:runresult((word "BA_graph(" en "," m ")"))
+end
+
+;; Run a MAG function in the python script.
+;; @param en - The number of nodes for the graph (since N is a global variable)
+;; @param attrs - A list of attributes to construct the graph from - these will designate
+;; attribute affinity matrices defined in the data.py file to use for edge probabilities.
+;; @param style - A connection style to use if no more specific setup is designated.
+to-report mag [ en attrs style ]
+  report py:runresult(
+    (word "MAG_graph(" en "," attrs ",'" style "')")
+  )
+end
+
+to connect_mag
+  let u 0
+  let v 0
+  foreach mag-g [ row ->
+     set v 0
+     foreach row [ el ->
+      let rand random-float 1
+      if (el > rand) and (u != v) [
+        ;show(word "Linking turtle b/c el:" el " and rand " rand)
+        ask turtle u [ create-social-friend-with turtle v ]
+      ]
+      set v v + 1
+    ]
+    set u u + 1
+  ]
 end
 
 ;;;;;;;;;;;;;;;
@@ -1105,7 +1109,7 @@ epsilon
 epsilon
 0
 10
-1.0
+0.0
 0.1
 1
 NIL
@@ -1197,8 +1201,8 @@ SLIDER
 N
 N
 0
-500
-240.0
+1000
+500.0
 10
 1
 NIL
@@ -1272,7 +1276,7 @@ CHOOSER
 spread-type
 spread-type
 "simple" "complex" "cognitive"
-2
+0
 
 TEXTBOX
 302
@@ -1500,7 +1504,7 @@ CHOOSER
 message-file
 message-file
 "default" "50-50" "gradual"
-0
+1
 
 SWITCH
 27
@@ -1609,7 +1613,7 @@ CHOOSER
 graph-type
 graph-type
 "erdos-renyi" "watts-strogatz" "barabasi-albert" "mag" "facebook"
-2
+3
 
 SLIDER
 437
@@ -1670,7 +1674,7 @@ watts-strogatz-k
 watts-strogatz-k
 0
 N - 1
-7.0
+3.0
 1
 1
 NIL
@@ -1699,6 +1703,16 @@ TEXTBOX
 Barabasi-Albert (ba)
 11
 0.0
+1
+
+CHOOSER
+564
+472
+703
+517
+mag-style
+mag-style
+"default" "homophilic" "heterophilic"
 1
 
 @#$#@#$#@

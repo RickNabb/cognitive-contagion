@@ -6,6 +6,8 @@ Author: Nick Rabb (nick.rabb2@gmail.com)
 '''
 
 import networkx as nx
+import mag
+from random import random
 
 '''
 Return a NetLogo-safe Erdos-Renyi graph from the NetworkX package.
@@ -36,6 +38,26 @@ Return a Netlogo-safe Barabasi-Albert graph from the NetworkX package.
 '''
 def BA_graph(n, m):
   G = nx.barabasi_albert_graph(n, m)
+  return nlogo_safe_nodes_edges(G)
+
+'''
+Create a MAG graph for N nodes, given L attributes, and a style of connection
+if there is no specified connection affinity matrix.
+
+:param n: The number of nodes.
+:param attrs: A list of attributes to gather Theta affinity matrices for in order
+to properly calculate the product of all attribute affinities for the matrix.
+:param style: A string denoting how to connect the attributes - default, homophilic, or heterophilic.
+'''
+def MAG_graph(n, attrs, style):
+  p_edge = mag.attr_mag(n, attrs, style)
+  G = nx.Graph()
+  G.add_nodes_from(range(0, len(p_edge[0])))
+  for i in range(0,len(p_edge)):
+    for j in range(0,len(p_edge)):
+      rand = random()
+      if (rand <= p_edge[(i,j)]):
+        G.add_edge(i, j)
   return nlogo_safe_nodes_edges(G)
 
 '''

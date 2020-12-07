@@ -125,9 +125,19 @@ RELEVANT EMPIRICAL DATA
 """
 
 # Attribute A distribution values
+HomophilicThetaRow = lambda row, l, p, s, d: [ 1/(1 + d + s * abs(pow(row - i, p))) for i in range(0, l) ]
+SquareHomophilicThetaRow = lambda row, l: HomophilicThetaRow(row, l, 2, 5, 0.5)
+LinearHomophilicThetaRow = lambda row, l: HomophilicThetaRow(row, l, 1, 5, 0.5)
+
+HeterophilicThetaRow = lambda row, l, p, s, d: [ (abs(pow(i-row,p)))/(s*pow(max(abs(l-row-1), row)+d,p)) for i in range(0, l) ]
+SquareHeterophilicThetaRow = lambda row, l: HeterophilicThetaRow(row, l, 2, 2, 0)
+LinearHeterophilicThetaRow = lambda row, l: HeterophilicThetaRow(row, l, 1, 2, 0)
+
 AVals = [1, 1, 1, 1, 1, 1, 1]
 ADist = create_discrete_dist_sm(AVals)
-AMAGTheta = np.ones((7,7)) * 0.05
+AMAGDefaultTheta = np.ones((7,7)) * 0.05
+AMAGHomophilicTheta = np.matrix([ HomophilicThetaRow(i, len(AVals), 4, 10, 0.5) for i in range(0, len(AVals)) ])
+AMAGHeterophilicTheta = np.matrix([ LinearHeterophilicThetaRow(i, len(AVals)) for i in range(0, len(AVals)) ])
 
 AttributeValues = {
   Attributes.A.name: {
@@ -144,7 +154,11 @@ AttributeDistributions = {
 }
 
 AttributeMAGThetas = {
-  Attributes.A.name: AMAGTheta
+  Attributes.A.name: {
+    'default': AMAGDefaultTheta,
+    'homophilic': AMAGHomophilicTheta,
+    'heterophilic': AMAGHeterophilicTheta
+  }   
 }
 
 '''

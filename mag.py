@@ -1,19 +1,23 @@
 import numpy as np
 from data import *
 from stats import *
+import networkx as nx
 
 def mag(n, L, Thetas):
   P = []
   for u in range(0, n):
     P.append([])
     for v in range(0, n):
-      # The two attribute lists for agent1 (u) and agent2 (v)
-      lu = L[u]
-      lv = L[v]
-      p = 1
-      for i in range(0, len(lu)):
-        p *= Thetas[i][lu[i]][lv[i]]
-      P[u].append(p)
+      if (u == v):
+        P[u].append(0)
+      else:
+        # The two attribute lists for agent1 (u) and agent2 (v)
+        lu = L[u]
+        lv = L[v]
+        p = 1
+        for i in range(0, len(lu)):
+          p *= Thetas[i][(lu[i],lv[i])]
+        P[u].append(p)
   return np.array(P)
 
 def sample_L(n, attrs):
@@ -35,9 +39,19 @@ def print_IP(L):
             counted[tup] += 1
     print(counted)
 
-def attr_mag(n, attrs):
+'''
+Return a probability matrix for the probabilities of each node i connecting
+to node j.
+
+:param n: The number of nodes.
+:param attrs: A list of attributes to gather Theta affinity matrices for in order
+to properly calculate the product of all attribute affinities for the matrix.
+:param style: A string denoting how to connect the attributes - default, homophilic, or heterophilic.
+'''
+def attr_mag(n, attrs, style):
   L = sample_L(n, attrs)
-  Thetas = list(map(lambda attr: AttributeMAGThetas[attr.name], attrs))
+  Thetas = list(map(lambda attr: AttributeMAGThetas[attr.name][style], attrs))
+  print(Thetas)
   g = mag(n,L,Thetas)
   return g
 
