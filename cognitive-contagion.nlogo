@@ -42,14 +42,7 @@ to setup
   set-default-shape medias "box"
 
   ;; Python imports and setup
-  py:setup "python"
-  py:run "import sys"
-  py:run "import os"
-  py:run "import kronecker as kron"
-  py:run "from data import *"
-  py:run "from messaging import *"
-  py:run "import mag as MAG"
-  py:run "from nlogo_graphs import *"
+  setup-py
 
   set citizen-priors []
   set citizen-malleables [ "Attributes.A" ]
@@ -87,6 +80,17 @@ to setup
   layout
 
   reset-ticks
+end
+
+to setup-py
+  py:setup "python"
+  py:run "import sys"
+  py:run "import os"
+  py:run "import kronecker as kron"
+  py:run "from data import *"
+  py:run "from messaging import *"
+  py:run "import mag as MAG"
+  py:run "from nlogo_graphs import *"
 end
 
 ;; For runs of the cognitive contagion simulations, set function parameters according to the type of
@@ -218,15 +222,44 @@ to connect-agents
     set G ba-graph N ba-m
   ]
   if graph-type = "mag" [
-    set G mag N (list-as-py-array citizen-malleables false) mag-style
+    set G mag N (list-as-py-array (sort citizen-malleables) false) mag-style
+;    show [dict-value brain "A"] of citizens
+    let i 0
+
+    ;; Here, we have to reset the agent beliefs to be what they were in the MAG algorithm, otherwise
+    ;; the edge connections don't make sense.
+    repeat length (dict-value G "L") [
+      let cit-attrs (item i (dict-value G "L"))
+      let j 0
+
+      ;; We update beliefs in the sorted order of malleables then priors because that's how L is
+      ;; generated in the MAG algorithm.
+      foreach (sort citizen-malleables) [ attr ->
+        ask citizens with [(dict-value brain "ID") = i] [
+          set brain update-agent-belief brain attr (item j cit-attrs)
+        ]
+        set j j + 1
+      ]
+      foreach (sort citizen-priors) [ attr ->
+        ask citizens with [(dict-value brain "ID") = i] [
+          set brain update-agent-belief brain attr (item j cit-attrs)
+        ]
+        set j j + 1
+      ]
+      set i i + 1
+    ]
+;    show [sort (list (dict-value brain "ID") (dict-value brain "A"))] of citizens
   ]
 
   let edges (dict-value G "edges")
-    foreach edges [ ed ->
-      let end-1 (item 0 ed)
-      let end-2 (item 1 ed)
-      ask citizen end-1 [ create-social-friend-with citizen end-2 ]
-    ]
+  foreach edges [ ed ->
+    let end-1 (item 0 ed)
+    let end-2 (item 1 ed)
+    let cit1 citizen end-1
+    let cit2 citizen end-2
+;    show (word "Linking " cit1 "(" (dict-value [brain] of cit1 "A") ") and " cit2 "(" (dict-value [brain] of cit2 "A") ")")
+    ask citizen end-1 [ create-social-friend-with citizen end-2 ]
+  ]
 end
 
 to connect-media
@@ -508,13 +541,13 @@ to give-self-ip-color
   let a (dict-value brain "A")
 
   ;; Attribute A color
-  if a = -3 [ set color (extract-rgb 12) ]
-  if a = -2 [ set color (extract-rgb 14) ]
-  if a = -1 [ set color (extract-rgb 16) ]
-  if a = 0 [ set color (extract-rgb violet) ]
-  if a = 1 [ set color (extract-rgb 106) ]
-  if a = 2 [ set color (extract-rgb 104) ]
-  if a = 3 [ set color (extract-rgb 102) ]
+  if a = 0 [ set color (extract-rgb 12) ]
+  if a = 1 [ set color (extract-rgb 14) ]
+  if a = 2 [ set color (extract-rgb 16) ]
+  if a = 3 [ set color (extract-rgb violet) ]
+  if a = 4 [ set color (extract-rgb 106) ]
+  if a = 5 [ set color (extract-rgb 104) ]
+  if a = 6 [ set color (extract-rgb 102) ]
 end
 
 to give-link-ip-color [ l ]
@@ -576,6 +609,16 @@ to-report create-agent-brain [ id prior-attrs malleable-attrs prior-vals malleab
   )
 end
 
+;; Change a belief in the agent brain structure.
+;; @param agent-brain - The [brain] variable of the citizen agent type.
+;; @param attr - The attribute to change.
+;; @param value - The new value to update it to.
+to-report update-agent-belief [ agent-brain attr value ]
+  report py:runresult(
+    (word "update_agent_belief(" (agent-brain-as-py-dict agent-brain) "," attr "," value ")")
+  )
+end
+
 to-report random-message [ attrs ]
   report py:runresult(
     word "random_message(" (list-as-py-array attrs false) ")"
@@ -613,6 +656,15 @@ end
 to-report dist-to-agent-brain [ agent-brain message ]
   report py:runresult(
     word "dist_to_agent_brain(" (agent-brain-as-py-dict agent-brain) "," (list-as-py-dict message true false) ")"
+  )
+end
+
+;; Get the distance between two agents' brains.
+;; @param agent1-brain - The first agent's brain.
+;; @param agent2-brain - The second agent's brain.
+to-report dist-between-agent-brains [ agent1-brain agent2-brain ]
+  report py:runresult(
+    word "dist_between_agent_brains(" (agent-brain-as-py-dict agent1-brain) "," (agent-brain-as-py-dict agent2-brain) ")"
   )
 end
 
@@ -689,6 +741,30 @@ end
 ;;;;;;;;;;;;;;;
 ; HELPER PROCS
 ;;;;;;;;;;;;;;;
+
+to-report neighbor-distance [ cit ]
+  let cit-distances []
+  ask cit [
+    let ego-brain brain
+    ask social-friend-neighbors [
+      set cit-distances lput (dist-between-agent-brains brain ego-brain) cit-distances
+    ]
+  ]
+  report cit-distances
+end
+
+to-report avg-citizen-distance
+  let distance-n []
+  ask citizens [
+    let cit-distances neighbor-distance self
+
+    ;; Some nodes may be disconnected
+    if length cit-distances > 0 [
+      set distance-n lput (mean cit-distances) distance-n
+    ]
+  ]
+  report list (mean distance-n) (variance distance-n)
+end
 
 to-report array_shape [g]
   report py:runresult(
@@ -964,10 +1040,10 @@ NIL
 BUTTON
 172
 56
-235
-89
-NIL
-test
+279
+90
+Reset Python
+setup-py
 NIL
 1
 T
@@ -1011,15 +1087,15 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -4 4\n\nhistogram [dict-value brain \"A\"] of citizens"
+"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -1 7\n\nhistogram [dict-value brain \"A\"] of citizens"
 
 MONITOR
 725
 593
 783
 638
--3
-count citizens with [dict-value brain \"A\" = -3]
+0
+count citizens with [dict-value brain \"A\" = 0]
 1
 1
 11
@@ -1029,8 +1105,8 @@ MONITOR
 593
 840
 638
--2
-count citizens with [dict-value brain \"A\" = -2]
+1
+count citizens with [dict-value brain \"A\" = 1]
 1
 1
 11
@@ -1040,8 +1116,8 @@ MONITOR
 593
 911
 638
--1
-count citizens with [dict-value brain \"A\" = -1]
+2
+count citizens with [dict-value brain \"A\" = 2]
 1
 1
 11
@@ -1049,10 +1125,10 @@ count citizens with [dict-value brain \"A\" = -1]
 MONITOR
 917
 593
-967
+975
 638
-0
-count citizens with [dict-value brain \"A\" = 0]
+3
+count citizens with [dict-value brain \"A\" = 3]
 1
 1
 11
@@ -1060,10 +1136,10 @@ count citizens with [dict-value brain \"A\" = 0]
 MONITOR
 973
 593
-1023
+1031
 638
-1
-count citizens with [dict-value brain \"A\" = 1]
+4
+count citizens with [dict-value brain \"A\" = 4]
 1
 1
 11
@@ -1202,7 +1278,7 @@ N
 N
 0
 1000
-500.0
+100.0
 10
 1
 NIL
@@ -1466,21 +1542,21 @@ true
 false
 "" ""
 PENS
-"3" 1.0 0 -15390905 true "" "plot (count citizens with [ dict-value brain \"A\" = 3 ]) / (count citizens)"
-"2" 1.0 0 -14070903 true "" "plot (count citizens with [ dict-value brain \"A\" = 2 ]) / (count citizens)"
-"1" 1.0 0 -10649926 true "" "plot (count citizens with [ dict-value brain \"A\" = 1 ]) / (count citizens)"
-"0" 1.0 0 -10141563 true "" "plot (count citizens with [ dict-value brain \"A\" = 0 ]) / (count citizens)"
-"-1" 1.0 0 -2139308 true "" "plot (count citizens with [ dict-value brain \"A\" = -1 ]) / (count citizens)"
-"-2" 1.0 0 -5298144 true "" "plot (count citizens with [ dict-value brain \"A\" = -2 ]) / (count citizens)"
-"-3" 1.0 0 -10873583 true "" "plot (count citizens with [ dict-value brain \"A\" = -3 ]) / (count citizens)"
+"6" 1.0 0 -15390905 true "" "plot (count citizens with [ dict-value brain \"A\" = 6 ]) / (count citizens)"
+"5" 1.0 0 -14070903 true "" "plot (count citizens with [ dict-value brain \"A\" = 5 ]) / (count citizens)"
+"4" 1.0 0 -10649926 true "" "plot (count citizens with [ dict-value brain \"A\" = 4 ]) / (count citizens)"
+"3" 1.0 0 -10141563 true "" "plot (count citizens with [ dict-value brain \"A\" = 3 ]) / (count citizens)"
+"2" 1.0 0 -2139308 true "" "plot (count citizens with [ dict-value brain \"A\" = 2 ]) / (count citizens)"
+"1" 1.0 0 -5298144 true "" "plot (count citizens with [ dict-value brain \"A\" = 1 ]) / (count citizens)"
+"0" 1.0 0 -10873583 true "" "plot (count citizens with [ dict-value brain \"A\" = 0 ]) / (count citizens)"
 
 MONITOR
 1028
 593
 1086
 638
-2
-count citizens with [dict-value brain \"A\" = 2]
+5
+count citizens with [dict-value brain \"A\" = 5]
 17
 1
 11
@@ -1490,8 +1566,8 @@ MONITOR
 593
 1148
 638
-3
-count citizens with [dict-value brain \"A\" = 3]
+6
+count citizens with [dict-value brain \"A\" = 6]
 17
 1
 11
@@ -1613,7 +1689,7 @@ CHOOSER
 graph-type
 graph-type
 "erdos-renyi" "watts-strogatz" "barabasi-albert" "mag" "facebook"
-3
+0
 
 SLIDER
 437

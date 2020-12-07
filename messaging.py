@@ -222,6 +222,31 @@ def believe_message(agent, message, spread_type, brain_type):
 
   return agent
 
+'''
+Get all agent beliefs as a dictionary of belief name and value.
+
+:param agent: The agent brain object.
+'''
+def agent_brain_belief_dict(agent):
+  all_beliefs = []
+  all_beliefs.extend(sorted(agent['malleable']))
+  all_beliefs.extend(sorted(agent['prior']))
+  temp_message = { bel: -1 for bel in all_beliefs }
+  return agent_beliefs_from_message(agent, temp_message)
+
+"""
+Get the distance between two agent brains.
+
+:param agent: The agent's brain.
+:param message: The message.
+"""
+def dist_between_agent_brains(agent1, agent2):
+  agent1_beliefs = agent_brain_belief_dict(agent1)
+  agent2_beliefs = agent_brain_belief_dict(agent2)
+  a1_arr = message_as_array(agent1_beliefs)
+  a2_arr = message_as_array(agent2_beliefs)
+  return message_distance(a1_arr, a2_arr)
+
 """
 Get the distance between a message and the corresponding vector of agent brain
 parameters.
@@ -261,6 +286,17 @@ def agent_belief_vec_from_message(agent, message):
     for attr in message:
         agent_beliefs.append(agent[attr])
     return np.array(agent_beliefs)
+  
+'''
+Update an agent brain dictionary to change the value of agent[attr] to value.
+
+:param agent: The agent's brain.
+:param attr: The attribute to update.
+:param value: The value to update it to.
+'''
+def update_agent_belief(agent, attr, value):
+  agent[attr.name] = value
+  return agent
     
 """
 AGENT GENERAL FUNCTIONS

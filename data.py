@@ -15,13 +15,13 @@ BELIEF ATTRIBUTES
 """
 
 class TestDiscrete(Enum):
-  NT = -3
-  NTW = -2
-  NO = -1
-  Z = 0
-  O = 1
-  TW = 2
-  T = 3
+  STRONG_DISBELIEF=0
+  DISBELIEF=1
+  MOD_DISBELIEF=2
+  UNCERTAIN=3
+  MOD_BELIEF=4
+  BELIEF=5
+  STRONG_BELIEF=6
 
 class Attributes(Enum):
   A = TestDiscrete
@@ -126,8 +126,8 @@ RELEVANT EMPIRICAL DATA
 
 # Attribute A distribution values
 HomophilicThetaRow = lambda row, l, p, s, d: [ 1/(1 + d + s * abs(pow(row - i, p))) for i in range(0, l) ]
-SquareHomophilicThetaRow = lambda row, l: HomophilicThetaRow(row, l, 2, 5, 0.5)
-LinearHomophilicThetaRow = lambda row, l: HomophilicThetaRow(row, l, 1, 5, 0.5)
+SquareHomophilicThetaRow = lambda row, l: HomophilicThetaRow(row, l, 2, 5, 0.25)
+LinearHomophilicThetaRow = lambda row, l: HomophilicThetaRow(row, l, 1, 5, 0.25)
 
 HeterophilicThetaRow = lambda row, l, p, s, d: [ (abs(pow(i-row,p)))/(s*pow(max(abs(l-row-1), row)+d,p)) for i in range(0, l) ]
 SquareHeterophilicThetaRow = lambda row, l: HeterophilicThetaRow(row, l, 2, 2, 0)
@@ -136,7 +136,7 @@ LinearHeterophilicThetaRow = lambda row, l: HeterophilicThetaRow(row, l, 1, 2, 0
 AVals = [1, 1, 1, 1, 1, 1, 1]
 ADist = create_discrete_dist_sm(AVals)
 AMAGDefaultTheta = np.ones((7,7)) * 0.05
-AMAGHomophilicTheta = np.matrix([ HomophilicThetaRow(i, len(AVals), 4, 10, 0.5) for i in range(0, len(AVals)) ])
+AMAGHomophilicTheta = np.matrix([ HomophilicThetaRow(i, len(AVals), 2, 5, 0.5) for i in range(0, len(AVals)) ])
 AMAGHeterophilicTheta = np.matrix([ LinearHeterophilicThetaRow(i, len(AVals)) for i in range(0, len(AVals)) ])
 
 AttributeValues = {

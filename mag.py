@@ -51,9 +51,10 @@ to properly calculate the product of all attribute affinities for the matrix.
 def attr_mag(n, attrs, style):
   L = sample_L(n, attrs)
   Thetas = list(map(lambda attr: AttributeMAGThetas[attr.name][style], attrs))
-  print(Thetas)
+  # print(Thetas)
   g = mag(n,L,Thetas)
-  return g
+  # print(g)
+  return (g, L)
 
 def main():
     #test_create_dist()

@@ -50,15 +50,23 @@ to properly calculate the product of all attribute affinities for the matrix.
 :param style: A string denoting how to connect the attributes - default, homophilic, or heterophilic.
 '''
 def MAG_graph(n, attrs, style):
-  p_edge = mag.attr_mag(n, attrs, style)
+  (p_edge, L) = mag.attr_mag(n, attrs, style)
+  # print(p_edge)
+  # print(L)
   G = nx.Graph()
   G.add_nodes_from(range(0, len(p_edge[0])))
   for i in range(0,len(p_edge)):
     for j in range(0,len(p_edge)):
       rand = random()
       if (rand <= p_edge[(i,j)]):
+        # if (abs(L[i][0]-L[j][0]) >= 2):
+          # print(f'Chance to connect {L[i]} and {L[j]}: {p_edge[(i,j)]}')
+          # print(f'Rolled {rand}: {rand <= p_edge[(i,j)]}')
         G.add_edge(i, j)
-  return nlogo_safe_nodes_edges(G)
+  # print(f'Num edges: {len(G.edges)}')
+  nlogo_G = nlogo_safe_nodes_edges(G)
+  nlogo_G.update({'L': L})
+  return nlogo_G
 
 '''
 Return NetLogo-safe graph structures.
