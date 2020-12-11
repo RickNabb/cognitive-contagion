@@ -370,7 +370,17 @@ def process_multi_chart_data(in_path, in_filename='percent-agent-beliefs'):
       data = process_chart_data(f'{in_path}/{file}')
       props = data[0]
       multi_data.append(data[1])
-  return (multi_data, props)
+
+  means = { key: [] for key in multi_data[0].keys() }
+  for data in multi_data:
+    for key in data.keys():
+      data_vector = np.array(data[key]['y']).astype('float32')
+      if means[key] == []:
+        means[key] = data_vector
+      else:
+        means[key] = np.vstack([means[key], data_vector])
+
+  return (means, props)
 
 '''
 Given some multi-chart data, plot it and save the plot.
@@ -382,11 +392,55 @@ Given some multi-chart data, plot it and save the plot.
 :param show_plot: Whether or not to display the plot before saving.
 '''
 def plot_multi_chart_data(multi_data, props, out_path, out_filename='aggregate-chart', show_plot=False):
-  plot = plot_nlogo_multi_chart(props, multi_data)
+  plot = plot_nlogo_multi_chart_line(props, multi_data)
   plt.savefig(f'{out_path}/{out_filename}.png')
   if show_plot: plt.show()
   plt.close()
   return plot
+
+'''
+Plot multiple NetLogo chart data sets on a single plot. 
+
+:param props: The properties dictionary read in from reading the chart file. This
+describes pen colors, x and y min and max, etc.
+:param multi_data: A dictionary (keyed by line) of matrices where each row is one simulation's worth of data points.
+'''
+def plot_nlogo_multi_chart_stacked(props, multi_data):
+  # series = pd.Series(data)
+  fig, (ax) = plt.subplots(1, figsize=(8,6))
+  # ax, ax2 = fig.add_subplot(2)
+  ax.set_ylim([0, 1])
+  y_min = int(props['y min'])
+  y_max = int(props['y max'])
+  x_min = int(props['x min'])
+  x_max = int(props['x max'])
+  plt.yticks(np.arange(y_min, y_max+0.2, step=0.2))
+  plt.xticks(np.arange(x_min, x_max+10, step=10))
+  ax.set_ylabel("% of agents who believe a")
+  ax.set_xlabel("Time step")
+
+  line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
+  
+  mean_vecs = []
+  var_vecs = []
+  for key in multi_data:
+    mean_vec = multi_data[key].mean(0)
+    var_vec = multi_data[key].var(0)
+    mean_vecs.append(mean_vec)
+    var_vecs.append(var_vec)
+  
+  ax.set_xlim([0,len(mean_vecs[0])])
+  # return mean_vecs
+  plt.stackplot(range(x_min, len(mean_vecs[0])), mean_vecs, colors=[ f'{line_color(c)}' for c in multi_data.keys() ], labels=[ f'b = {b}' for b in multi_data.keys() ])
+
+  # y_pos = mean_vecs[0]
+  # for i in range(0, len(mean_vecs)):
+  #   if i > 0:
+  #     y_pos += mean_vecs[i]
+  #   mean_vec = mean_vecs[i]
+  #   var_vec = var_vecs[i]
+  #   ax.fill_between(range(x_min, len(mean_vec)), y_pos-var_vec, y_pos+var_vec, facecolor=f'{line_color(key)}44')
+  # return multi_data
 
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot
@@ -397,7 +451,7 @@ entire figure.
 describes pen colors, x and y min and max, etc.
 :param multi_data: A list of dataframes that contain chart data.
 '''
-def plot_nlogo_multi_chart(props, multi_data):
+def plot_nlogo_multi_chart_line(props, multi_data):
   # series = pd.Series(data)
   fig, (ax) = plt.subplots(1, figsize=(8,6))
   # ax, ax2 = fig.add_subplot(2)
@@ -410,30 +464,16 @@ def plot_nlogo_multi_chart(props, multi_data):
   plt.xticks(np.arange(x_min, x_max+10, step=10))
   ax.set_ylabel("% of agents who believe a")
   ax.set_xlabel("Time step")
-
-  means = { key: [] for key in multi_data[0].keys() }
+ 
   line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
-  for data in multi_data:
-    for key in data.keys():
-      hex_color = line_color(key)
-      data_vector = np.array(data[key]['y']).astype('float32')
-      # print(data[key])
-      # print(data[key]['y'])
-      # plt.plot(data[key]['y'], c=hex_color)
-      # ax2.scatter(x=data[key]['x'], y=data[key]['y'], s=2, c=f'{hex_color}44')
-      if means[key] == []:
-        means[key] = data_vector
-      else:
-        means[key] = np.vstack([means[key], data_vector])
-  
-  for key in means:
-    mean_vec = means[key].mean(0)
-    var_vec = means[key].var(0)
+  for key in multi_data:
+    mean_vec = multi_data[key].mean(0)
+    var_vec = multi_data[key].var(0)
     # print(var_vec)
     ax.plot(mean_vec, c=line_color(key))
     ax.fill_between(range(x_min, len(mean_vec)), mean_vec-var_vec, mean_vec+var_vec, facecolor=f'{line_color(key)}44')
   
-  return means
+  return multi_data
       
 '''
 From a NetLogo world export file, read in the simulation data for citizens
