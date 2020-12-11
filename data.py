@@ -370,7 +370,7 @@ def process_multi_chart_data(in_path, in_filename='percent-agent-beliefs'):
       data = process_chart_data(f'{in_path}/{file}')
       props = data[0]
       multi_data.append(data[1])
-  return multi_data
+  return (multi_data, props)
 
 '''
 Given some multi-chart data, plot it and save the plot.
@@ -387,52 +387,6 @@ def plot_multi_chart_data(multi_data, props, out_path, out_filename='aggregate-c
   if show_plot: plt.show()
   plt.close()
   return plot
-
-'''
-Process charts for the simple-complex comparison: the experiment where one
-media agent tries to sway the entire population. It runs each contagion type for
-each of three message files 10 times. This creates aggregate charts
-for each of the 6 combinations.
-'''
-def process_simple_complex_exp_outputs(path):
-  contagion_types = [ 'simple', 'complex' ]
-  message_files = [ '50-50', 'default', 'gradual' ]
-
-  if not os.path.isdir(f'{path}/results'):
-    os.mkdir(f'{path}/results')
-
-  for ct in contagion_types:
-    for mf in message_files:
-      (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}',  'percent-agent-beliefs')
-      plot_multi_chart_data(f'{path}/results', f'{ct}-{mf}-agg-chart')
-
-def process_cognitive_exp_outputs(path):
-  cognitive_fns = [ 'linear-mid', 'linear-gullible', 'linear-stubborn', 'sigmoid-gullible', 'sigmoid-mid', 'sigmoid-stubborn' ]
-  message_files = [ '50-50', 'default', 'gradual' ]
-
-  if not os.path.isdir(f'{path}/results'):
-    os.mkdir(f'{path}/results')
-
-  for cf in cognitive_fns:
-    for mf in message_files:
-      (multi_data, props) = process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}',  'percent-agent-beliefs')
-      plot_multi_chart_data(multi_data, props, f'{path}/results',f'{mf}-{cf}-agg-chart')
-
-def process_graph_exp_outputs(path):
-  contagion_types = [ 'simple', 'complex', 'cognitive' ]
-  cognitive_fns = [ 'sigmoid-stubborn' ]
-  message_files = [ '50-50', 'default', 'gradual' ]
-  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert', 'mag' ]
-
-  if not os.path.isdir(f'{path}/results'):
-    os.mkdir(f'{path}/results')
-
-  for ct in contagion_types:
-    for cf in cognitive_fns:
-      for mf in message_files:
-        for gt in graph_types:
-          (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
-          plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
 
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot
@@ -761,3 +715,56 @@ def pi_data_charts(stats_data, attr, replace, title_w_replace, path_w_replace):
   pi_keys = { (prod[0], prod[1]): 0 for prod in itertools.product(partisanships, ideologies) }
   for key in pi_keys:
     plot_stats_means(stats_data[key][attr], title_w_replace.replace(replace, str(key)), path_w_replace.replace(replace, f'{key[0]}-{key[1]}'))
+
+"""
+##################
+EXPERIMENT-SPECIFIC
+ANALYSIS
+##################
+"""
+
+'''
+Process charts for the simple-complex comparison: the experiment where one
+media agent tries to sway the entire population. It runs each contagion type for
+each of three message files 10 times. This creates aggregate charts
+for each of the 6 combinations.
+'''
+def process_simple_complex_exp_outputs(path):
+  contagion_types = [ 'simple', 'complex' ]
+  message_files = [ '50-50', 'default', 'gradual' ]
+
+  if not os.path.isdir(f'{path}/results'):
+    os.mkdir(f'{path}/results')
+
+  for ct in contagion_types:
+    for mf in message_files:
+      (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}',  'percent-agent-beliefs')
+      plot_multi_chart_data(f'{path}/results', f'{ct}-{mf}-agg-chart')
+
+def process_cognitive_exp_outputs(path):
+  cognitive_fns = [ 'linear-mid', 'linear-gullible', 'linear-stubborn', 'sigmoid-gullible', 'sigmoid-mid', 'sigmoid-stubborn' ]
+  message_files = [ '50-50', 'default', 'gradual' ]
+
+  if not os.path.isdir(f'{path}/results'):
+    os.mkdir(f'{path}/results')
+
+  for cf in cognitive_fns:
+    for mf in message_files:
+      (multi_data, props) = process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}',  'percent-agent-beliefs')
+      plot_multi_chart_data(multi_data, props, f'{path}/results',f'{mf}-{cf}-agg-chart')
+
+def process_graph_exp_outputs(path):
+  contagion_types = [ 'simple', 'complex', 'cognitive' ]
+  cognitive_fns = [ 'sigmoid-stubborn' ]
+  message_files = [ '50-50', 'default', 'gradual' ]
+  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert', 'mag' ]
+
+  if not os.path.isdir(f'{path}/results'):
+    os.mkdir(f'{path}/results')
+
+  for ct in contagion_types:
+    for cf in cognitive_fns:
+      for mf in message_files:
+        for gt in graph_types:
+          (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
+          plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
