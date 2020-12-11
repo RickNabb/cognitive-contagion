@@ -358,20 +358,32 @@ def process_chart_data(path):
 Read multiple NetLogo chart export files and plot all of them on a single
 Matplotlib plot.
 
-:param path: The directory to search for files in.
-:param filename: A piece of filename that indicates which files to parse
+:param in_path: The directory to search for files in.
+:param in_filename: A piece of filename that indicates which files to parse
 in the process. This should usually be the name of the chart in the NetLogo file.
 '''
-def process_multi_chart_data(path, filename='percent-agent-beliefs', show_plot=False):
+def process_multi_chart_data(in_path, in_filename='percent-agent-beliefs'):
   props = None
   multi_data = []
-  for file in os.listdir(path):
-    if filename in file:
-      data = process_chart_data(f'{path}/{file}')
+  for file in os.listdir(in_path):
+    if in_filename in file:
+      data = process_chart_data(f'{in_path}/{file}')
       props = data[0]
       multi_data.append(data[1])
+  return multi_data
+
+'''
+Given some multi-chart data, plot it and save the plot.
+
+:param multi_data: Data with means and std deviations for each point.
+:param props: Properties object for the plotting.
+:param out_path: A path to save the results in.
+:param out_filename: A filename to save results as, defaults to 'aggregate-chart'
+:param show_plot: Whether or not to display the plot before saving.
+'''
+def plot_multi_chart_data(multi_data, props, out_path, out_filename='aggregate-chart', show_plot=False):
   plot = plot_nlogo_multi_chart(props, multi_data)
-  plt.savefig(f'{path}/aggregate-chart.png')
+  plt.savefig(f'{out_path}/{out_filename}.png')
   if show_plot: plt.show()
   plt.close()
   return plot
@@ -385,16 +397,43 @@ for each of the 6 combinations.
 def process_simple_complex_exp_outputs(path):
   contagion_types = [ 'simple', 'complex' ]
   message_files = [ '50-50', 'default', 'gradual' ]
+
+  if not os.path.isdir(f'{path}/results'):
+    os.mkdir(f'{path}/results')
+
   for ct in contagion_types:
     for mf in message_files:
-      process_multi_chart_data(f'{path}/{ct}/{mf}', 'percent-agent-beliefs')
+      (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}',  'percent-agent-beliefs')
+      plot_multi_chart_data(f'{path}/results', f'{ct}-{mf}-agg-chart')
 
 def process_cognitive_exp_outputs(path):
   cognitive_fns = [ 'linear-mid', 'linear-gullible', 'linear-stubborn', 'sigmoid-gullible', 'sigmoid-mid', 'sigmoid-stubborn' ]
   message_files = [ '50-50', 'default', 'gradual' ]
+
+  if not os.path.isdir(f'{path}/results'):
+    os.mkdir(f'{path}/results')
+
   for cf in cognitive_fns:
     for mf in message_files:
-      process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}', 'percent-agent-beliefs')
+      (multi_data, props) = process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}',  'percent-agent-beliefs')
+      plot_multi_chart_data(multi_data, props, f'{path}/results',f'{mf}-{cf}-agg-chart')
+
+def process_graph_exp_outputs(path):
+  contagion_types = [ 'simple', 'complex', 'cognitive' ]
+  cognitive_fns = [ 'sigmoid-stubborn' ]
+  message_files = [ '50-50', 'default', 'gradual' ]
+  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert', 'mag' ]
+
+  if not os.path.isdir(f'{path}/results'):
+    os.mkdir(f'{path}/results')
+
+  for ct in contagion_types:
+    for cf in cognitive_fns:
+      for mf in message_files:
+        for gt in graph_types:
+          (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
+          plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
+
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot
 each data set and then draw a line of the means at each point through the
