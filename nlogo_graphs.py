@@ -6,7 +6,9 @@ Author: Nick Rabb (nick.rabb2@gmail.com)
 '''
 
 import networkx as nx
+import numpy as np
 import mag
+from messaging import *
 from random import random
 
 '''
@@ -77,3 +79,61 @@ def nlogo_safe_nodes_edges(G):
   nodes = list(G.nodes)
   edges = [ [e[0], e[1]] for e in G.edges ]
   return { 'nodes': nodes, 'edges': edges }
+
+'''
+Convert a graph from NetLogo to a networkx graph.
+
+:param citizens: A list of citizen agents' brain objects.
+:param friend_links: A list of citizen agents' friend links
+'''
+def nlogo_graph_to_nx(citizens, friend_links):
+  G = nx.Graph()
+  for cit in citizens:
+    cit_id = int(cit['ID'])
+    G.add_node(cit_id)
+    for attr in cit['malleable']:
+      G.nodes[cit_id][attr] = cit[attr]
+    for attr in cit['prior']:
+      G.nodes[cit_id][attr] = cit[attr]
+  for link in friend_links:
+    link_split = link.split(' ')
+    end1 = link_split[1]
+    end2 = link_split[2].replace(')','')
+    G.add_edge(int(end1), int(end2))
+  return G
+
+def influencer_paths(G, subscribers, target):
+  target_id = int(target.split(' ')[1].replace(')', ''))
+  return { subscriber.split(' ')[2].replace(')',''): nx.all_simple_paths(G, subscriber.split(' ')[2].replace(')',''), target, cutoff=5) for subscriber in subscribers }
+
+'''
+Get all paths from an influencer to a target node who only contain nodes within
+a certain threshold distance from a given message.
+
+:param citizens: A list of citizen agents' brain objects.
+:param friend_links: A list of citizen agents' friend links
+:param subscribers: A list of subscribers of the influencer.
+:param target: The target node to find paths to.
+:param message: The message to use for agent distance.
+:param threshold: A value that the distance between message and agent cannot
+exceed in valid paths.
+'''
+def influencer_paths_within_distance(citizens, friend_links, subscribers, target, message, threshold):
+  G = nlogo_graph_to_nx(citizens, friend_links)
+
+  # Assign edge weights of the message distance to the first agent in the link
+  for e in G.edges:
+    G[e[0]][e[1]]['weight'] = dist_to_agent_brain(G.nodes[e[0]], message)
+
+  target_id = int(target.split(' ')[1].replace(')', ''))
+  paths = { int(subscriber.split(' ')[2].replace(')','')): nx.dijkstra_path(G, int(subscriber.split(' ')[2].replace(')','')), target_id) for subscriber in subscribers }
+
+  distance_paths = {}
+  threshold_paths = {}
+  for subscriber in paths.keys():
+    dist_path = [ dist_to_agent_brain(G.nodes[v], message) for v in paths[subscriber] ]
+    distance_paths[subscriber] = dist_path
+    if sum((np.array(dist_path)-threshold) > 0) == 0:
+      threshold_paths[subscriber] = dist_path
+      # threshold_paths[subscriber] = paths[subscriber]
+  return threshold_paths

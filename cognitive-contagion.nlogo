@@ -117,8 +117,26 @@ to set-cognitive-contagion-params
     set cognitive-scalar? true
     set cognitive-exponent? false
     set cognitive-translate? true
-    set cognitive-scalar 20
     set cognitive-translate 10
+    set cognitive-scalar 20
+  ]
+  if cognitive-fn = "threshold-gullible" [
+    set cognitive-scalar? false
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-translate 6
+  ]
+  if cognitive-fn = "threshold-mid" [
+    set cognitive-scalar? false
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-translate 3
+  ]
+  if cognitive-fn = "threshold-stubborn" [
+    set cognitive-scalar? false
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-translate 1
   ]
   ;; Threshold t
   let t 1
@@ -181,18 +199,18 @@ end
 to create-media
   if media-agents? [
     ; Disbelief
-    ;  create-medias 1 [
-    ;    set media-attrs [ ["A" -3] ]
-    ;    set cur-message-id 0
-    ;    set messages-sent []
-    ;    setxy -4 0
-    ;    set color red
-    ;    set idee "DIS"
-    ;  ]
+;      create-medias 1 [
+;        set media-attrs [ ["A" 0] ]
+;        set cur-message-id 0
+;        set messages-sent []
+;        setxy -4 0
+;        set color red
+;        set idee "DIS"
+;      ]
 
     ;  ; Uncertainty
     ;  create-medias 1 [
-    ;    set media-attrs [ ["A" 0] ]
+    ;    set media-attrs [ ["A" 3] ]
     ;    set cur-message-id 0
     ;    set messages-sent []
     ;    setxy -3 0
@@ -202,7 +220,7 @@ to create-media
 
     ; Belief
     create-medias 1 [
-      set media-attrs [ ["A" 3] ]
+      set media-attrs [ ["A" 6] ]
       set cur-message-id 0
       set messages-sent []
       setxy -4 1
@@ -364,6 +382,10 @@ to receive-message [ cit sender message message-id ]
         if member? "sigmoid" cognitive-fn [ set p (1 / (1 + (exp (expon * (dist - trans))))) ]
 ;        show (word "dist: " dist)
 ;        show (word self ": " (dict-value brain "A") " " message " (p=" p ")")
+
+        if member? "threshold" cognitive-fn [
+          ifelse dist <= trans [ set p 1 ] [ set p 0 ]
+        ]
 
         ;; Whether or not to believe the message
         let roll random-float 1
@@ -739,6 +761,30 @@ to connect_mag
     ]
     set u u + 1
   ]
+end
+
+;;
+;;
+to-report nx-graph
+  let citizen-arr list-as-py-array (map [ cit -> agent-brain-as-py-dict [brain] of citizen cit ] (range N)) false
+  let edge-arr list-as-py-array (sort social-friends) true
+  report py:runresult(
+    (word "nlogo_graph_to_nx(" citizen-arr "," edge-arr ")")
+  )
+end
+
+;;
+;; @param influencer -
+;; @param target -
+to-report influencer-distance-paths [ influencer target message t ]
+  let citizen-arr list-as-py-array (map [ cit -> agent-brain-as-py-dict [brain] of citizen cit ] (range N)) false
+  let edge-arr list-as-py-array (sort social-friends) true
+  let subscribers-arr list-as-py-array (sort [subscribers] of influencer) true
+  let message-dict list-as-py-dict message true false
+;  report (word "influencer_paths_within_distance(" citizen-arr "," edge-arr "," subscribers-arr ",'" target "'," message-dict "," t ")")
+  report py:runresult(
+    (word "influencer_paths_within_distance(" citizen-arr "," edge-arr "," subscribers-arr ",'" target "'," message-dict "," t ")")
+  )
 end
 
 ;;;;;;;;;;;;;;;
@@ -1281,7 +1327,7 @@ N
 N
 0
 1000
-250.0
+500.0
 10
 1
 NIL
@@ -1355,7 +1401,7 @@ CHOOSER
 spread-type
 spread-type
 "simple" "complex" "cognitive"
-0
+2
 
 TEXTBOX
 302
@@ -1420,12 +1466,12 @@ NIL
 CHOOSER
 18
 792
-160
+171
 837
 cognitive-fn
 cognitive-fn
-"linear-gullible" "linear-stubborn" "linear-mid" "sigmoid-gullible" "sigmoid-stubborn" "sigmoid-mid"
-4
+"linear-gullible" "linear-stubborn" "linear-mid" "threshold-gullible" "threshold-mid" "threshold-stubborn" "sigmoid-gullible" "sigmoid-stubborn" "sigmoid-mid"
+7
 
 SLIDER
 22
@@ -1583,7 +1629,7 @@ CHOOSER
 message-file
 message-file
 "default" "50-50" "gradual"
-1
+0
 
 SWITCH
 27
@@ -1620,7 +1666,7 @@ cognitive-scalar
 cognitive-scalar
 -20
 20
-4.0
+20.0
 1
 1
 NIL
@@ -1633,7 +1679,7 @@ SWITCH
 875
 cognitive-scalar?
 cognitive-scalar?
-0
+1
 1
 -1000
 
@@ -1698,7 +1744,7 @@ SLIDER
 437
 369
 560
-403
+402
 erdos-renyi-p
 erdos-renyi-p
 0
@@ -1710,10 +1756,10 @@ NIL
 HORIZONTAL
 
 TEXTBOX
-25
-214
-213
-237
+27
+250
+215
+273
 Influencer Parameters
 11
 0.0
@@ -1733,7 +1779,7 @@ SLIDER
 564
 369
 698
-403
+402
 watts-strogatz-p
 watts-strogatz-p
 0
@@ -1748,12 +1794,12 @@ SLIDER
 565
 409
 692
-443
+442
 watts-strogatz-k
 watts-strogatz-k
 0
 N - 1
-3.0
+5.0
 1
 1
 NIL
@@ -1763,12 +1809,12 @@ SLIDER
 435
 483
 560
-517
+516
 ba-m
 ba-m
 0
 20
-2.0
+3.0
 1
 1
 NIL
@@ -1792,7 +1838,7 @@ CHOOSER
 mag-style
 mag-style
 "default" "homophilic" "heterophilic"
-1
+2
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -2184,11 +2230,55 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
       <value value="&quot;linear-mid&quot;"/>
       <value value="&quot;linear-gullible&quot;"/>
       <value value="&quot;linear-stubborn&quot;"/>
+      <value value="&quot;threshold-mid&quot;"/>
+      <value value="&quot;threshold-gullible&quot;"/>
+      <value value="&quot;threshold-stubborn&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="message-file">
       <value value="&quot;default&quot;"/>
       <value value="&quot;50-50&quot;"/>
       <value value="&quot;gradual&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="graph-type">
+      <value value="&quot;erdos-renyi&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="graph-exp" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
+    <setup>setup
+set-cognitive-contagion-params
+let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe))
+set contagion-dir (word run-dir "/" spread-type "/" message-file "/" cognitive-fn "/" graph-type)
+py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
+py:run (word "if not os.path.isdir('" run-dir "/" spread-type "'): os.mkdir('" run-dir "/" spread-type "')")
+py:run (word "if not os.path.isdir('" run-dir "/" spread-type "/" message-file "'): os.mkdir('" run-dir "/" spread-type "/" message-file "')")
+py:run (word "if not os.path.isdir('" run-dir "/" spread-type "/" message-file "/" cognitive-fn "'): os.mkdir('" run-dir "/" spread-type "/" message-file "/" cognitive-fn "')")
+py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-dir "')")</setup>
+    <go>go</go>
+    <final>let rand random 10000
+export-world (word contagion-dir "/" rand "_world.csv")
+export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent-beliefs.csv")</final>
+    <metric>count citizens</metric>
+    <enumeratedValueSet variable="N">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cognitive-fn">
+      <value value="&quot;sigmoid-stubborn&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spread-type">
+      <value value="&quot;simple&quot;"/>
+      <value value="&quot;complex&quot;"/>
+      <value value="&quot;cognitive&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="message-file">
+      <value value="&quot;default&quot;"/>
+      <value value="&quot;50-50&quot;"/>
+      <value value="&quot;gradual&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="graph-type">
+      <value value="&quot;erdos-renyi&quot;"/>
+      <value value="&quot;watts-strogatz&quot;"/>
+      <value value="&quot;barabasi-albert&quot;"/>
+      <value value="&quot;mag&quot;"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>

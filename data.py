@@ -393,10 +393,14 @@ Given some multi-chart data, plot it and save the plot.
 '''
 def plot_multi_chart_data(multi_data, props, out_path, out_filename='aggregate-chart', show_plot=False):
   plot = plot_nlogo_multi_chart_line(props, multi_data)
-  plt.savefig(f'{out_path}/{out_filename}.png')
+  plt.savefig(f'{out_path}/{out_filename}_line.png')
   if show_plot: plt.show()
   plt.close()
-  return plot
+
+  plot = plot_nlogo_multi_chart_stacked(props, multi_data)
+  plt.savefig(f'{out_path}/{out_filename}_stacked.png')
+  if show_plot: plt.show()
+  plt.close()
 
 '''
 Plot multiple NetLogo chart data sets on a single plot. 
@@ -416,8 +420,8 @@ def plot_nlogo_multi_chart_stacked(props, multi_data):
   x_max = int(props['x max'])
   plt.yticks(np.arange(y_min, y_max+0.2, step=0.2))
   plt.xticks(np.arange(x_min, x_max+10, step=10))
-  ax.set_ylabel("% of agents who believe a")
-  ax.set_xlabel("Time step")
+  ax.set_ylabel("Portion of agents who believe b")
+  ax.set_xlabel("Time Step")
 
   line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
   
@@ -430,17 +434,7 @@ def plot_nlogo_multi_chart_stacked(props, multi_data):
     var_vecs.append(var_vec)
   
   ax.set_xlim([0,len(mean_vecs[0])])
-  # return mean_vecs
   plt.stackplot(range(x_min, len(mean_vecs[0])), mean_vecs, colors=[ f'{line_color(c)}' for c in multi_data.keys() ], labels=[ f'b = {b}' for b in multi_data.keys() ])
-
-  # y_pos = mean_vecs[0]
-  # for i in range(0, len(mean_vecs)):
-  #   if i > 0:
-  #     y_pos += mean_vecs[i]
-  #   mean_vec = mean_vecs[i]
-  #   var_vec = var_vecs[i]
-  #   ax.fill_between(range(x_min, len(mean_vec)), y_pos-var_vec, y_pos+var_vec, facecolor=f'{line_color(key)}44')
-  # return multi_data
 
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot
@@ -462,8 +456,8 @@ def plot_nlogo_multi_chart_line(props, multi_data):
   x_max = int(props['x max'])
   plt.yticks(np.arange(y_min, y_max+0.2, step=0.2))
   plt.xticks(np.arange(x_min, x_max+10, step=10))
-  ax.set_ylabel("% of agents who believe a")
-  ax.set_xlabel("Time step")
+  ax.set_ylabel("% of agents who believe b")
+  ax.set_xlabel("Time Step")
  
   line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
   for key in multi_data:
@@ -781,8 +775,13 @@ def process_simple_complex_exp_outputs(path):
       (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}',  'percent-agent-beliefs')
       plot_multi_chart_data(f'{path}/results', f'{ct}-{mf}-agg-chart')
 
+'''
+Process data for the cognitive contagion function experiments. This generates
+plots for nine different functions: three variations of linear, threshold, and
+sigmoid.
+'''
 def process_cognitive_exp_outputs(path):
-  cognitive_fns = [ 'linear-mid', 'linear-gullible', 'linear-stubborn', 'sigmoid-gullible', 'sigmoid-mid', 'sigmoid-stubborn' ]
+  cognitive_fns = [ 'linear-mid', 'linear-gullible', 'linear-stubborn', 'sigmoid-gullible', 'sigmoid-mid', 'sigmoid-stubborn', 'threshold-mid', 'threshold-gullible', 'threshold-stubborn' ]
   message_files = [ '50-50', 'default', 'gradual' ]
 
   if not os.path.isdir(f'{path}/results'):
