@@ -1,3 +1,24 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; COGNITIVE CONTAGION MODEL
+;; Author: Nick Rabb (nicholas.rabb@tufts.edu)
+;;
+;; This simulation space contains code to generate several different contagion models
+;; across different network topologies and propagation types. It implements the simple,
+;; complex, and cognitive contagion models; several contagion functions; and various
+;; parameterizations of graph topologies to test against.
+;;
+;; It also has implementations of different message set capabilities, read from external files,
+;; to run consistent message simulations. Moreover, graphs can be exported to text files that can
+;; be read in to ensure consistency across simulations.
+;;
+;; This simulation frequently interfaces with external Python scripts, so there are a handful of
+;; helper functions in the project to assist with data conversion & parsing. There are also functions
+;; useful for post-simulation data analysis, as well as BehaviorSpace pipelines to run experiments.
+;;
+;; TODO:
+;; - Move agent memory to numpy data structure for speed
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 extensions [py]
 
 globals [
@@ -44,6 +65,7 @@ to setup
   ;; Python imports and setup
   setup-py
 
+  ;; Set the priors and malleables for each citizen
   set citizen-priors []
   set citizen-malleables [ "Attributes.A" ]
 
@@ -85,6 +107,7 @@ to setup
   reset-ticks
 end
 
+;; Set up all the relevant Python scripts
 to setup-py
   py:setup "python"
   py:run "import sys"
@@ -94,76 +117,6 @@ to setup-py
   py:run "from messaging import *"
   py:run "import mag as MAG"
   py:run "from nlogo_graphs import *"
-end
-
-;; For runs of the cognitive contagion simulations, set function parameters according to the type of
-;; function being used.
-to set-cognitive-contagion-params
-  if cognitive-fn = "linear-gullible" [
-    set cognitive-scalar? true
-    set cognitive-exponent? false
-    set cognitive-translate? true
-    set cognitive-scalar 0
-    set cognitive-translate 1
-  ]
-  if cognitive-fn = "linear-mid" [
-    set cognitive-scalar? true
-    set cognitive-exponent? false
-    set cognitive-translate? true
-    set cognitive-scalar 1
-    set cognitive-translate 1
-  ]
-  if cognitive-fn = "linear-stubborn" [
-    set cognitive-scalar? true
-    set cognitive-exponent? false
-    set cognitive-translate? true
-    set cognitive-translate 10
-    set cognitive-scalar 20
-  ]
-  if cognitive-fn = "threshold-gullible" [
-    set cognitive-scalar? false
-    set cognitive-exponent? false
-    set cognitive-translate? true
-    set cognitive-translate 6
-  ]
-  if cognitive-fn = "threshold-mid" [
-    set cognitive-scalar? false
-    set cognitive-exponent? false
-    set cognitive-translate? true
-    set cognitive-translate 3
-  ]
-  if cognitive-fn = "threshold-stubborn" [
-    set cognitive-scalar? false
-    set cognitive-exponent? false
-    set cognitive-translate? true
-    set cognitive-translate 1
-  ]
-  ;; Threshold t
-  let t 1
-  if cognitive-fn = "sigmoid-gullible" [
-    set t 6
-    set cognitive-scalar? false
-    set cognitive-exponent? true
-    set cognitive-translate? true
-    set cognitive-exponent 1
-    set cognitive-translate t + 1
-  ]
-  if cognitive-fn = "sigmoid-mid" [
-    set t 2
-    set cognitive-scalar? false
-    set cognitive-exponent? true
-    set cognitive-translate? true
-    set cognitive-exponent 2
-    set cognitive-translate t + 1
-  ]
-  if cognitive-fn = "sigmoid-stubborn" [
-    set t 1
-    set cognitive-scalar? false
-    set cognitive-exponent? true
-    set cognitive-translate? true
-    set cognitive-exponent 4
-    set cognitive-translate t + 1
-  ]
 end
 
 to create-agents
@@ -183,7 +136,7 @@ to create-citizen [ id prior-vals malleable-vals ]
     set brain b
     set messages-heard []
     set messages-believed []
-    set size 1
+    set size 0.5
     setxy random-xcor random-ycor
   ]
 end
@@ -297,6 +250,82 @@ to connect-media
 end
 
 ;;;;;;;;;;;;;;;;;
+;; BEHAVIORSPACE SIMULATION
+;; PROCS
+;;;;;;;;;;;;;;;;;
+
+;; For runs of the cognitive contagion simulations, set function parameters according to the type of
+;; function being used.
+;; NOTE: These are only used with BehaviorSpace simulations!!
+to set-cognitive-contagion-params
+  if cognitive-fn = "linear-gullible" [
+    set cognitive-scalar? true
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-scalar 0
+    set cognitive-translate 1
+  ]
+  if cognitive-fn = "linear-mid" [
+    set cognitive-scalar? true
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-scalar 1
+    set cognitive-translate 1
+  ]
+  if cognitive-fn = "linear-stubborn" [
+    set cognitive-scalar? true
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-translate 10
+    set cognitive-scalar 20
+  ]
+  if cognitive-fn = "threshold-gullible" [
+    set cognitive-scalar? false
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-translate 6
+  ]
+  if cognitive-fn = "threshold-mid" [
+    set cognitive-scalar? false
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-translate 3
+  ]
+  if cognitive-fn = "threshold-stubborn" [
+    set cognitive-scalar? false
+    set cognitive-exponent? false
+    set cognitive-translate? true
+    set cognitive-translate 1
+  ]
+  ;; Threshold t
+  let t 1
+  if cognitive-fn = "sigmoid-gullible" [
+    set t 6
+    set cognitive-scalar? false
+    set cognitive-exponent? true
+    set cognitive-translate? true
+    set cognitive-exponent 1
+    set cognitive-translate t + 1
+  ]
+  if cognitive-fn = "sigmoid-mid" [
+    set t 2
+    set cognitive-scalar? false
+    set cognitive-exponent? true
+    set cognitive-translate? true
+    set cognitive-exponent 2
+    set cognitive-translate t + 1
+  ]
+  if cognitive-fn = "sigmoid-stubborn" [
+    set t 1
+    set cognitive-scalar? false
+    set cognitive-exponent? true
+    set cognitive-translate? true
+    set cognitive-exponent 4
+    set cognitive-translate t + 1
+  ]
+end
+
+;;;;;;;;;;;;;;;;;
 ;; SIMULATION PROCS
 ;;;;;;;;;;;;;;;;;
 
@@ -322,6 +351,7 @@ to step
       ]
     ]
   ] [
+    ;; In the case where we do not have influencer agents, simply do a contagion from the agent perspective
 ;    ask citizens [
 ;      let c self
 ;      ask social-friend-neighbors [
@@ -342,10 +372,15 @@ to update-agents
   ]
 end
 
+;; Update any display properties of agents
 to update-citizen
   if show-citizen-political? [ give-self-ip-color ]
 end
 
+;; Initiate the sending of a message from influencer agent m to its subscribers.
+;;
+;; @param m - The influencer agent to send the message.
+;; @param message - The message to send.
 to send-media-message-to-subscribers [ m message ]
   ask m [
     let mid cur-message-id
@@ -359,6 +394,13 @@ to send-media-message-to-subscribers [ m message ]
   ]
 end
 
+;; Have a citizen agent receive a message: hear it, either believe it or not, and subsequently either
+;; share it or not.
+;;
+;; @param cit - The citizen agent who is receiving the message.
+;; @param sender - The originator of the message (CURRENTLY NOT USED -- SHOULD BE REMOVED)
+;; @param message - The message itself.
+;; @param message-id - The unique ID of the message (used so the citizen agent does not duplicate shares)
 to receive-message [ cit sender message message-id ]
   ask cit [
     if not (heard-message? self ticks message-id) [
@@ -441,6 +483,12 @@ to receive-message [ cit sender message message-id ]
   ]
 end
 
+;; Have a citizen agent believe a message and update its cognitive model. This also records
+;; that the agent believed message message-id at the current tick.
+;;
+;; @param cit - The citizen to believe the message.
+;; @param message-id - The id of the message.
+;; @param message - The message itself.
 to believe-message [ cit message-id message ]
   ask cit [
     let i (index-of-dict-entry messages-believed ticks)
@@ -456,6 +504,13 @@ to believe-message [ cit message-id message ]
   ]
 end
 
+;; Return whether or not a citizen agent has already heard a given message id
+;; at tick tix.
+;;
+;; @param cit - The citizen to check.
+;; @param tix - The tick number to check against.
+;; @param message-id - The message ID to check for.
+;; @reports a boolean whether or not the citizen has already heard that message at tick tix.
 to-report heard-message? [ cit tix message-id ]
   let heard? false
   ask cit [
@@ -467,6 +522,12 @@ to-report heard-message? [ cit tix message-id ]
   report heard?
 end
 
+;; Have a citizen agent hear a message and record that they've done so (so they don't
+;; interact with the same message again).
+;;
+;; @param cit - The citizen to hear the message.
+;; @param message-id - The ID of the message to record with the current tick.
+;; @param message - The message itself.
 to hear-message [ cit message-id message ]
   ask cit [
     let i (index-of-dict-entry messages-heard ticks)
@@ -491,6 +552,9 @@ end
 ; I/O PROCEDURES
 ;;;;;;;;;;;;;
 
+;; Save the current state of the graph to a file (whose path is specified in the simulation interface).
+;; This will save all the agents with their state variables, the social connections between citizen agents,
+;; and the influencer agents state and subscribers.
 to save-graph
   ;; TODO: Find some way to get the prior & malleable attributes into a list rather than hardcoding
   let cit-ip ([(list self (dict-value brain "A") (dict-value brain "ID"))] of citizens)
@@ -500,6 +564,8 @@ to save-graph
   py:run (word "save_graph('" save-graph-path "','" cit-ip "','" cit-social "','" media-ip "','" media-sub "')")
 end
 
+;; Read a graph back in from a data file (specified by the load-graph-path variable in the interface) and
+;; construct the model appropriately.
 to read-graph
   let graph py:runresult(word "read_graph('" load-graph-path "')")
   let citizenz item 0 graph
@@ -582,15 +648,21 @@ to give-link-ip-color [ l ]
 end
 
 to give-self-link-ip-color
-  set color (extract-rgb gray)
-  if [shape] of end1 = [shape] of end2 [
-    set color (extract-rgb green)
-  ]
-  if [color] of end1 = [color] of end2 [
-    set color [color] of end1
+  let c1 [color] of end1
+  let c2 [color] of end2
+  let opacity 100
+  ifelse c1 = c2 [
+    ifelse length c1 = 4 [
+      set color (replace-item 3 c1 opacity)
+    ] [
+      set color (lput opacity c1)
+    ]
+  ] [
+    set color lput opacity (extract-rgb gray)
   ]
 end
 
+;; Lay out the simulation display based on the properties set in the simulation interface.
 to layout
   update-agents
 
@@ -773,9 +845,14 @@ to-report nx-graph
   )
 end
 
+;; Calculate paths between influencers and target agents given a message and a threshold. This will return paths
+;; that only contain agents of threshold distance from the message.
 ;;
-;; @param influencer -
-;; @param target -
+;; @param influencer - The influencer agent (w_0 of the path)
+;; @param target - The target agent (w_k of the path)
+;; @param message - The message being compared to each agent in the paths
+;; @param t - The threshold of distance between agent brain and message to use for path counts
+;; @reports A list of paths only containing agents within threshold distance of the message.
 to-report influencer-distance-paths [ influencer target message t ]
   let citizen-arr list-as-py-array (map [ cit -> agent-brain-as-py-dict [brain] of citizen cit ] (range N)) false
   let edge-arr list-as-py-array (sort social-friends) true
@@ -1070,9 +1147,9 @@ ticks
 30.0
 
 BUTTON
-20
+21
 55
-83
+84
 88
 setup
 setup
@@ -1104,9 +1181,9 @@ NIL
 1
 
 BUTTON
-20
+21
 98
-83
+84
 131
 Step
 step
@@ -1194,9 +1271,9 @@ count citizens with [dict-value brain \"A\" = 4]
 11
 
 BUTTON
-94
+95
 55
-157
+158
 88
 NIL
 go
@@ -1247,14 +1324,14 @@ SWITCH
 91
 show-media-connections?
 show-media-connections?
-0
+1
 1
 -1000
 
 BUTTON
-94
+95
 98
-160
+161
 131
 NIL
 layout
@@ -1629,7 +1706,7 @@ CHOOSER
 message-file
 message-file
 "default" "50-50" "gradual"
-0
+2
 
 SWITCH
 27
@@ -1838,7 +1915,7 @@ CHOOSER
 mag-style
 mag-style
 "default" "homophilic" "heterophilic"
-2
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -2278,6 +2355,24 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
       <value value="&quot;erdos-renyi&quot;"/>
       <value value="&quot;watts-strogatz&quot;"/>
       <value value="&quot;barabasi-albert&quot;"/>
+      <value value="&quot;mag&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="influence-likelihood-paths" repetitions="100" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>show "wow"</go>
+    <timeLimit steps="1"/>
+    <metric>length (influencer-distance-paths (media 500) (one-of citizens with [dict-value brain "A" = 0]) [["A" 6]] 2)</metric>
+    <metric>length (influencer-distance-paths (media 500) (one-of citizens with [dict-value brain "A" = 1]) [["A" 6]] 2)</metric>
+    <metric>length (influencer-distance-paths (media 500) (one-of citizens with [dict-value brain "A" = 2]) [["A" 6]] 2)</metric>
+    <metric>length (influencer-distance-paths (media 500) (one-of citizens with [dict-value brain "A" = 3]) [["A" 6]] 2)</metric>
+    <metric>length (influencer-distance-paths (media 500) (one-of citizens with [dict-value brain "A" = 4]) [["A" 6]] 2)</metric>
+    <metric>length (influencer-distance-paths (media 500) (one-of citizens with [dict-value brain "A" = 5]) [["A" 6]] 2)</metric>
+    <metric>length (influencer-distance-paths (media 500) (one-of citizens with [dict-value brain "A" = 6]) [["A" 6]] 2)</metric>
+    <enumeratedValueSet variable="graph-type">
+      <value value="&quot;erdos-renyi&quot;"/>
+      <value value="&quot;barabasi-albert&quot;"/>
+      <value value="&quot;watts-strogatz&quot;"/>
       <value value="&quot;mag&quot;"/>
     </enumeratedValueSet>
   </experiment>
