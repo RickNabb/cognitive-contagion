@@ -819,7 +819,7 @@ def process_graph_exp_outputs(path):
           (multi_data, props, model_params) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
           plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
 
-def chi_sq_test_multi_data(multi_data_1, params_1, multi_data_2, params_2):
+def chi_sq_test_multi_data(multi_data_1, multi_data_2, N):
   '''
   Perform a chi squared test on two sets of multi data for each timestep in the simulation data. 
 
@@ -827,17 +827,11 @@ def chi_sq_test_multi_data(multi_data_1, params_1, multi_data_2, params_2):
   in order to circumnavigate sampling 0 agents.
 
   :param multi_data_1: A first set of data over multiple simulation runs, keyed by agent belief value.
-  :param params_1: A dictionary of simulation parameters for the first set of data.
   :param multi_data_2: A second set of data over multiple simulation runs, keyed by agent belief value.
-  :param params_2: A dictionary of simulation parameters for the second set of data.
+  :param N: The number of agents in the simulation.
 
   :returns: Returns the chi2 timeseries data.
   '''
-
-  # This should be the same for both sets of data...
-  N = sum([ params_1[key] for key in multi_data_1[0] ])
-  if N != sum([ params_2[key] for key in multi_data_1[0] ]):
-    raise Exception('Multi data sets did not have the same number of agents')
 
   m1_means = [ multi_data_1[key].mean(0) for key in multi_data_1 ]
   m2_means = [ multi_data_2[key].mean(0) for key in multi_data_2 ]
