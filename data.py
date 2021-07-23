@@ -311,6 +311,11 @@ def process_chart_data(path):
   f.close()
   chunks = raw.split('\n\n')
 
+  model_lines = chunks[1].replace('"','').split('\n')
+  model_keys = model_lines[1].split(',')
+  model_vals = model_lines[2].split(',')
+  model_props = { model_keys[i]: model_vals[i] for i in range(len(model_keys)) }
+
   prop_lines = chunks[2].replace('"','').split('\n')
   chart_props = {}
   chart_props['color'] = {}
@@ -353,7 +358,7 @@ def process_chart_data(path):
     # del df['x']
     dfs[split[0]] = df
 
-  return (chart_props, dfs)
+  return (model_props, chart_props, dfs)
 
 '''
 Read multiple NetLogo chart export files and plot all of them on a single
@@ -369,8 +374,9 @@ def process_multi_chart_data(in_path, in_filename='percent-agent-beliefs'):
   for file in os.listdir(in_path):
     if in_filename in file:
       data = process_chart_data(f'{in_path}/{file}')
-      props = data[0]
-      multi_data.append(data[1])
+      model_params = data[0]
+      props = data[1]
+      multi_data.append(data[2])
 
   means = { key: [] for key in multi_data[0].keys() }
   for data in multi_data:
@@ -381,7 +387,7 @@ def process_multi_chart_data(in_path, in_filename='percent-agent-beliefs'):
       else:
         means[key] = np.vstack([means[key], data_vector])
 
-  return (means, props)
+  return (means, props, model_params)
 
 '''
 Given some multi-chart data, plot it and save the plot.
@@ -495,7 +501,7 @@ def process_sim_data(path):
 
   unneeded_cols = ['color', 'heading', 'xcor', 'ycor', 'label', 'label-color', 'shape', 'pen-size', 'pen-mode', 'size','hidden?']
   citizen_delete = ['media-attrs','messages-sent']
-  media_delete = ['messages-heard','brain','messages-believed','susceptible?','infected?','removed?','time-infected','num-infected','tp']
+  media_delete = ['messages-heard','brain','messages-believed']
 
   for col in unneeded_cols:
     del turtle_df[col]
@@ -773,7 +779,7 @@ def process_simple_complex_exp_outputs(path):
 
   for ct in contagion_types:
     for mf in message_files:
-      (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}',  'percent-agent-beliefs')
+      (multi_data, props, model_params) = process_multi_chart_data(f'{path}/{ct}/{mf}',  'percent-agent-beliefs')
       plot_multi_chart_data(f'{path}/results', f'{ct}-{mf}-agg-chart')
 
 '''
@@ -790,7 +796,7 @@ def process_cognitive_exp_outputs(path):
 
   for cf in cognitive_fns:
     for mf in message_files:
-      (multi_data, props) = process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}',  'percent-agent-beliefs')
+      (multi_data, props, model_params) = process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}',  'percent-agent-beliefs')
       plot_multi_chart_data(multi_data, props, f'{path}/results',f'{mf}-{cf}-agg-chart')
 
 '''
@@ -810,7 +816,7 @@ def process_graph_exp_outputs(path):
     for cf in cognitive_fns:
       for mf in message_files:
         for gt in graph_types:
-          (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
+          (multi_data, props, model_params) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
           plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
 
 def chi_sq_test_multi_data(multi_data_1, params_1, multi_data_2, params_2):
