@@ -9,6 +9,7 @@ import itertools
 import pandas as pd
 import os
 import numpy as np
+from scipy.stats import chi2_contingency
 
 """
 BELIEF ATTRIBUTES
@@ -792,6 +793,10 @@ def process_cognitive_exp_outputs(path):
       (multi_data, props) = process_multi_chart_data(f'{path}/cognitive/{mf}/{cf}',  'percent-agent-beliefs')
       plot_multi_chart_data(multi_data, props, f'{path}/results',f'{mf}-{cf}-agg-chart')
 
+'''
+Process data for the between-graphs experiments: those that run...
+  CONTAGION_METHOD X MESSAGES X GRAPH_TYPE
+'''
 def process_graph_exp_outputs(path):
   contagion_types = [ 'simple', 'complex', 'cognitive' ]
   cognitive_fns = [ 'sigmoid-stubborn' ]
@@ -807,3 +812,41 @@ def process_graph_exp_outputs(path):
         for gt in graph_types:
           (multi_data, props) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
           plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
+
+def chi_sq_test_multi_data(multi_data_1, params_1, multi_data_2, params_2):
+  '''
+  Perform a chi squared test on two sets of multi data for each timestep in the simulation data. 
+
+  NOTE: This converts agent population percentages to total numbers and pads by 1
+  in order to circumnavigate sampling 0 agents.
+
+  :param multi_data_1: A first set of data over multiple simulation runs, keyed by agent belief value.
+  :param params_1: A dictionary of simulation parameters for the first set of data.
+  :param multi_data_2: A second set of data over multiple simulation runs, keyed by agent belief value.
+  :param params_2: A dictionary of simulation parameters for the second set of data.
+
+  :returns: Returns the chi2 timeseries data.
+  '''
+
+  # This should be the same for both sets of data...
+  N = sum([ params_1[key] for key in multi_data_1[0] ])
+  if N != sum([ params_2[key] for key in multi_data_1[0] ]):
+    raise Exception('Multi data sets did not have the same number of agents')
+
+  m1_means = [ multi_data_1[key].mean(0) for key in multi_data_1 ]
+  m2_means = [ multi_data_2[key].mean(0) for key in multi_data_2 ]
+
+  data = []
+  for timestep in range(len(m1_means[0])):
+    data.append([])
+    # Append on lists of the values for each belief at timestep t 
+    data[timestep].append([ m1_means[bel][timestep] for bel in range(len(m1_means)) ])
+    data[timestep].append([ m2_means[bel][timestep] for bel in range(len(m2_means)) ])
+  
+  for data_t in data:
+    for i in range(len(data_t[0])):
+      data_t[0][i] = round(N * data_t[0][i] + 1)
+      data_t[1][i] = round(N * data_t[1][i] + 1)
+  
+  chi2_data = [ chi2_contingency(data_t) for data_t in data ]
+  return chi2_data
