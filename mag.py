@@ -20,11 +20,11 @@ def mag(n, L, Thetas):
         P[u].append(p)
   return np.array(P)
 
-def sample_L(n, attrs):
+def sample_L(n, attrs, resolution):
   # Create nodes w/ attributes
   L = []
   for i in range(0, n):
-    L.append(list(map(lambda attr: random_dist_sample(attr), attrs)))
+    L.append(list(map(lambda attr: random_dist_sample(attr, resolution), attrs)))
   return L
 
 def print_IP(L):
@@ -47,10 +47,11 @@ to node j.
 :param attrs: A list of attributes to gather Theta affinity matrices for in order
 to properly calculate the product of all attribute affinities for the matrix.
 :param style: A string denoting how to connect the attributes - default, homophilic, or heterophilic.
+:param resolution: An integer denoting how finely to break up discrete beliefs.
 '''
-def attr_mag(n, attrs, style):
-  L = sample_L(n, attrs)
-  Thetas = list(map(lambda attr: AttributeMAGThetas[attr.name][style], attrs))
+def attr_mag(n, attrs, style, resolution):
+  L = sample_L(n, attrs, resolution)
+  Thetas = list(map(lambda attr: AttributeMAGThetas[attr.name][style](resolution), attrs))
   # print(Thetas)
   g = mag(n,L,Thetas)
   # print(g)
@@ -58,7 +59,7 @@ def attr_mag(n, attrs, style):
 
 def main():
     #test_create_dist()
-    print(attr_mag(25, [ Attributes.A ]))
+    print(attr_mag(25, [ Attributes.TestDiscrete7 ]))
 
 if __name__ == '__main__':
     main()

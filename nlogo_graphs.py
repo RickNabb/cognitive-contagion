@@ -51,8 +51,8 @@ if there is no specified connection affinity matrix.
 to properly calculate the product of all attribute affinities for the matrix.
 :param style: A string denoting how to connect the attributes - default, homophilic, or heterophilic.
 '''
-def MAG_graph(n, attrs, style):
-  (p_edge, L) = mag.attr_mag(n, attrs, style)
+def MAG_graph(n, attrs, style, resolution):
+  (p_edge, L) = mag.attr_mag(n, attrs, style, resolution)
   # print(p_edge)
   # print(L)
   G = nx.Graph()
@@ -132,6 +132,7 @@ def influencer_paths_within_distance(citizens, friend_links, subscribers, target
   threshold_paths = {}
   for subscriber in paths.keys():
     dist_path = [ dist_to_agent_brain(G.nodes[v], message) for v in paths[subscriber] ]
+    dist_path = dist_path[:-1]
     distance_paths[subscriber] = dist_path
     if sum((np.array(dist_path)-threshold) > 0) == 0:
       threshold_paths[subscriber] = dist_path

@@ -114,6 +114,7 @@ to setup-py
   py:run "import os"
   py:run "import kronecker as kron"
   py:run "from data import *"
+  py:run (word "NUM_BELIEF_BUCKETS = " belief-resolution)
   py:run "from messaging import *"
   py:run "import mag as MAG"
   py:run "from nlogo_graphs import *"
@@ -136,7 +137,8 @@ to create-citizen [ id prior-vals malleable-vals ]
     set brain b
     set messages-heard []
     set messages-believed []
-    set size 0.5
+;    set size 0.5
+    set size 1
     setxy random-xcor random-ycor
   ]
 end
@@ -151,7 +153,7 @@ end
 
 to create-media
   if media-agents? [
-    ; Disbelief
+      ; Disbelief
 ;      create-medias 1 [
 ;        set media-attrs [ ["A" 0] ]
 ;        set cur-message-id 0
@@ -249,6 +251,10 @@ to connect-media
   ]
 end
 
+to setup-belief-plot
+
+end
+
 ;;;;;;;;;;;;;;;;;
 ;; BEHAVIORSPACE SIMULATION
 ;; PROCS
@@ -325,6 +331,38 @@ to set-cognitive-contagion-params
   ]
 end
 
+;; Calculate the distances between the brain of cit and its neighbors.
+;;
+;; @param cit - The citizen to calculate the distance for.
+;; @reports A list of distances between agent brains of cit and its neighbors.
+to-report neighbor-distance [ cit ]
+  let cit-distances []
+  ask cit [
+    let ego-brain brain
+    ask social-friend-neighbors [
+      set cit-distances lput (dist-between-agent-brains brain ego-brain) cit-distances
+    ]
+  ]
+  report cit-distances
+end
+
+;; Calculate the average of all average citizen distances. This can be
+;; used as a makeshift measure of homophily in the graph.
+;;
+;; @reports The average citizen distance across the entire graph.
+to-report avg-citizen-distance
+  let distance-n []
+  ask citizens [
+    let cit-distances neighbor-distance self
+
+    ;; Some nodes may be disconnected
+    if length cit-distances > 0 [
+      set distance-n lput (mean cit-distances) distance-n
+    ]
+  ]
+  report list (mean distance-n) (variance distance-n)
+end
+
 ;;;;;;;;;;;;;;;;;
 ;; SIMULATION PROCS
 ;;;;;;;;;;;;;;;;;
@@ -336,7 +374,7 @@ to go
 end
 
 to step
-  ifelse media-agents? [
+  if media-agents? [
     ;; Have media companies create messages
     let messages (dict-value messages-over-time (word ticks))
     foreach messages [ media-messages ->
@@ -350,15 +388,15 @@ to step
         ]
       ]
     ]
-  ] [
+  ]
+  if contagion-on? [
     ;; In the case where we do not have influencer agents, simply do a contagion from the agent perspective
-;    ask citizens [
-;      let c self
-;      ask social-friend-neighbors [
-;        let message []
-;        receive-message self c ([brain] of self) 0
-;      ]
-;    ]
+    ask citizens [
+      let c self
+      ask social-friend-neighbors [
+        receive-message self c (agent-brain-malleable-values c) 0
+      ]
+    ]
   ]
 
   layout
@@ -630,15 +668,21 @@ end
 
 to give-self-ip-color
   let a (dict-value brain "A")
+;  show (round (255 / belief-resolution) * a)
+  let bel-color []
+  set bel-color lput (255 - (round ((255 / (belief-resolution - 1)) * a))) bel-color
+  set bel-color lput 0 bel-color
+  set bel-color lput (round ((255 / (belief-resolution - 1)) * a)) bel-color
+  set color bel-color
 
   ;; Attribute A color
-  if a = 0 [ set color (extract-rgb 12) ]
-  if a = 1 [ set color (extract-rgb 14) ]
-  if a = 2 [ set color (extract-rgb 16) ]
-  if a = 3 [ set color (extract-rgb violet) ]
-  if a = 4 [ set color (extract-rgb 106) ]
-  if a = 5 [ set color (extract-rgb 104) ]
-  if a = 6 [ set color (extract-rgb 102) ]
+;  if a = 0 [ set color (extract-rgb 12) ] ; dark red
+;  if a = 1 [ set color (extract-rgb 14) ] ; red
+;  if a = 2 [ set color (extract-rgb 16) ] ; light red
+;  if a = 3 [ set color (extract-rgb 115) ] ; violet
+;  if a = 4 [ set color (extract-rgb 106) ] ; light blue
+;  if a = 5 [ set color (extract-rgb 104) ] ; blue
+;  if a = 6 [ set color (extract-rgb 102) ] ; dark blue
 end
 
 to give-link-ip-color [ l ]
@@ -680,6 +724,9 @@ end
 ; PY MESSAGING FILE
 ;;;;;;;;;;;;;;;
 
+;; NOTE: For procedures that simply report back what comes from a python function, please refer
+;; to the python function itself for function details.
+
 to-report load-messages-over-time [ path ]
   report py:runresult(
     word "read_message_over_time_data('" path "')"
@@ -688,7 +735,7 @@ end
 
 to-report sample-attr-dist [ attr ]
   report py:runresult(
-    word "random_dist_sample(" attr ")"
+    word "random_dist_sample(" attr "," belief-resolution ")"
   )
 end
 
@@ -733,6 +780,7 @@ end
 to-report believe-message-py [ agent-brain message ]
 ;  show(agent-brain-as-py-dict agent-brain)
   ;show(list-as-py-dict message false false)
+;  show (word "believe_message(" (agent-brain-as-py-dict agent-brain) ", " (list-as-py-dict message true false) ", '" spread-type "','" brain-type "')")
   report py:runresult(
     word "believe_message(" (agent-brain-as-py-dict agent-brain) ", " (list-as-py-dict message true false) ", '" spread-type "','" brain-type "')"
   )
@@ -812,12 +860,15 @@ end
 ;; @param attrs - A list of attributes to construct the graph from - these will designate
 ;; attribute affinity matrices defined in the data.py file to use for edge probabilities.
 ;; @param style - A connection style to use if no more specific setup is designated.
+;; @param belief-resolution - A parameterized setting to denote how finely to break up belief scales.
 to-report mag [ en attrs style ]
   report py:runresult(
-    (word "MAG_graph(" en "," attrs ",'" style "')")
+    (word "MAG_graph(" en "," attrs ",'" style "'," belief-resolution ")")
   )
 end
 
+;; Connect a MAG graph based on values in the global mag-g variable (those values
+;; are probabilities that two nodes in a graph will connect).
 to connect_mag
   let u 0
   let v 0
@@ -835,8 +886,10 @@ to connect_mag
   ]
 end
 
+;; Create a graph of agents and links with the help of the NetworkX python package. This procedure
+;; is not parameterized, but rather takes the citizens and social edges in the existing network.
 ;;
-;;
+;; @reports A NetworkX graph object (which ends up being a NetLogo dictionary of nodes and edges).
 to-report nx-graph
   let citizen-arr list-as-py-array (map [ cit -> agent-brain-as-py-dict [brain] of citizen cit ] (range N)) false
   let edge-arr list-as-py-array (sort social-friends) true
@@ -868,36 +921,17 @@ end
 ; HELPER PROCS
 ;;;;;;;;;;;;;;;
 
-to-report neighbor-distance [ cit ]
-  let cit-distances []
-  ask cit [
-    let ego-brain brain
-    ask social-friend-neighbors [
-      set cit-distances lput (dist-between-agent-brains brain ego-brain) cit-distances
-    ]
-  ]
-  report cit-distances
-end
-
-to-report avg-citizen-distance
-  let distance-n []
-  ask citizens [
-    let cit-distances neighbor-distance self
-
-    ;; Some nodes may be disconnected
-    if length cit-distances > 0 [
-      set distance-n lput (mean cit-distances) distance-n
-    ]
-  ]
-  report list (mean distance-n) (variance distance-n)
-end
-
 to-report array_shape [g]
   report py:runresult(
     word "kron.np.array(" g ").shape[0]"
   )
 end
 
+;; Get the value of an attribute from the Attributes enumeration in Python.
+;;
+;; @param attr - The variable name of the attribute.
+;; @param val - The value of the attribute to fetch.
+;; @reports The integer value associated with the enumeration.
 to-report name-of-attribute-val [ attr val ]
   report py:runresult(
     word "Attributes." attr ".value(" val ").name"
@@ -938,6 +972,12 @@ to-report agent-brain-token-list [ agent attr ]
   report token-list
 end
 
+to-report agent-brain-malleable-values [ agent ]
+  let b [brain] of agent
+  let malleables (dict-value b "malleable")
+  report filter [ bel -> member? (item 0 bel) malleables ] [brain] of agent
+end
+
 to-report histogrammable-brain-token-list [ agent attr ]
   let l agent-brain-token-list agent attr
   let i 0
@@ -950,6 +990,35 @@ to-report histogrammable-brain-token-list [ agent attr ]
   ]
   report hist
 end
+
+;; Limits a value between a min and a max.
+;; @param val - The value.
+;; @param lower - The lower bound.
+;; @param upper - The upper bound.
+;; @reports The value squeezed between the two bounds.
+to-report squeeze [ val lower upper ]
+  report (max (list (min list val upper) lower))
+end
+
+;; @reports a date/time string that is safe for file names
+to-report date-time-safe
+  let datetime date-and-time
+  let safedatetime ""
+  let i 0
+  repeat length datetime [
+    let char item i datetime
+    if char != " " and char != ":" and char != "." [
+      set safedatetime (word safedatetime char)
+    ]
+    set i i + 1
+  ]
+  report safedatetime
+end
+
+;;;;;;;;;;;;;;;;;;
+;; PROCS TO HELP
+;; WITH PYTHON CONVERSION
+;;;;;;;;;;;;;;;;;;
 
 to-report replace-dict-item [ l key value ]
   let key-i 0
@@ -1100,24 +1169,6 @@ to-report tuple-list-as-py-dict [ l key-quotes? val-quotes? ]
   ]
   report -1
 end
-
-to-report squeeze [ val lower upper ]
-  report (max (list (min list val upper) lower))
-end
-
-to-report date-time-safe
-  let datetime date-and-time
-  let safedatetime ""
-  let i 0
-  repeat length datetime [
-    let char item i datetime
-    if char != " " and char != ":" and char != "." [
-      set safedatetime (word safedatetime char)
-    ]
-    set i i + 1
-  ]
-  report safedatetime
-end
 @#$#@#$#@
 GRAPHICS-WINDOW
 1162
@@ -1213,7 +1264,7 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -1 7\n\nhistogram [dict-value brain \"A\"] of citizens"
+"default" 1.0 1 -16777216 true "" "plot-pen-reset  ;; erase what we plotted before\nset-plot-x-range -1 (belief-resolution + 1)\n\nhistogram [dict-value brain \"A\"] of citizens"
 
 MONITOR
 725
@@ -1288,10 +1339,10 @@ NIL
 0
 
 SLIDER
-510
-750
-640
-783
+536
+742
+666
+775
 threshold
 threshold
 0
@@ -1303,10 +1354,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-172
-277
-344
-310
+177
+278
+349
+311
 epsilon
 epsilon
 0
@@ -1324,7 +1375,7 @@ SWITCH
 91
 show-media-connections?
 show-media-connections?
-1
+0
 1
 -1000
 
@@ -1356,10 +1407,10 @@ Number of citizens
 1
 
 TEXTBOX
-172
-257
-338
-285
+177
+258
+343
+286
 Threshold to subscribe to media
 11
 0.0
@@ -1471,10 +1522,10 @@ Aggregate Charts
 1
 
 CHOOSER
-309
-792
-451
-837
+330
+793
+472
+838
 spread-type
 spread-type
 "simple" "complex" "cognitive"
@@ -1551,25 +1602,25 @@ cognitive-fn
 7
 
 SLIDER
-22
-738
-196
-771
+164
+739
+338
+772
 simple-spread-chance
 simple-spread-chance
 0
 1
-0.15
+0.2
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-207
-738
-381
-771
+349
+739
+523
+772
 complex-spread-ratio
 complex-spread-ratio
 0
@@ -1581,10 +1632,10 @@ NIL
 HORIZONTAL
 
 CHOOSER
-162
-792
-301
-837
+183
+793
+322
+838
 brain-type
 brain-type
 "discrete" "continuous"
@@ -1666,15 +1717,8 @@ Steps
 1.0
 true
 false
-"" ""
+"let i 0\nrepeat belief-resolution [\n  let pen-name (word i)\n  create-temporary-plot-pen pen-name\n  set-current-plot-pen pen-name\n  \n  let bel-color []\n  set bel-color lput (255 - (round ((255 / (belief-resolution - 1)) * i))) bel-color\n  set bel-color lput 0 bel-color\n  set bel-color lput (round ((255 / (belief-resolution - 1)) * i)) bel-color\n\n  set-plot-pen-color bel-color\n\n  set i i + 1\n]" "let i 0\nrepeat belief-resolution [\n  let pen-name (word i)\n  set-current-plot-pen pen-name\n  \n  plot (count citizens with [ dict-value brain \"A\" = i ]) / (count citizens)\n\n  set i i + 1\n]"
 PENS
-"6" 1.0 0 -15390905 true "" "plot (count citizens with [ dict-value brain \"A\" = 6 ]) / (count citizens)"
-"5" 1.0 0 -14070903 true "" "plot (count citizens with [ dict-value brain \"A\" = 5 ]) / (count citizens)"
-"4" 1.0 0 -10649926 true "" "plot (count citizens with [ dict-value brain \"A\" = 4 ]) / (count citizens)"
-"3" 1.0 0 -10141563 true "" "plot (count citizens with [ dict-value brain \"A\" = 3 ]) / (count citizens)"
-"2" 1.0 0 -2139308 true "" "plot (count citizens with [ dict-value brain \"A\" = 2 ]) / (count citizens)"
-"1" 1.0 0 -5298144 true "" "plot (count citizens with [ dict-value brain \"A\" = 1 ]) / (count citizens)"
-"0" 1.0 0 -10873583 true "" "plot (count citizens with [ dict-value brain \"A\" = 0 ]) / (count citizens)"
 
 MONITOR
 1028
@@ -1706,7 +1750,7 @@ CHOOSER
 message-file
 message-file
 "default" "50-50" "gradual"
-2
+0
 
 SWITCH
 27
@@ -1715,7 +1759,7 @@ SWITCH
 308
 media-agents?
 media-agents?
-0
+1
 1
 -1000
 
@@ -1780,7 +1824,7 @@ cognitive-translate
 cognitive-translate
 -10
 10
-1.0
+2.0
 1
 1
 NIL
@@ -1815,7 +1859,7 @@ CHOOSER
 graph-type
 graph-type
 "erdos-renyi" "watts-strogatz" "barabasi-albert" "mag" "facebook"
-0
+1
 
 SLIDER
 437
@@ -1916,6 +1960,32 @@ mag-style
 mag-style
 "default" "homophilic" "heterophilic"
 1
+
+SWITCH
+23
+738
+156
+771
+contagion-on?
+contagion-on?
+0
+1
+-1000
+
+SLIDER
+497
+99
+670
+133
+belief-resolution
+belief-resolution
+0
+100
+7.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -2320,21 +2390,26 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
       <value value="&quot;erdos-renyi&quot;"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="graph-exp" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
+  <experiment name="graph-exp" repetitions="100" sequentialRunOrder="false" runMetricsEveryStep="false">
     <setup>setup
 set-cognitive-contagion-params
 let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe))
-set contagion-dir (word run-dir "/" spread-type "/" message-file "/" cognitive-fn "/" graph-type)
+set contagion-dir (word run-dir "/" brain-type "/" spread-type "/" message-file "/" cognitive-fn "/" graph-type)
 py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
-py:run (word "if not os.path.isdir('" run-dir "/" spread-type "'): os.mkdir('" run-dir "/" spread-type "')")
-py:run (word "if not os.path.isdir('" run-dir "/" spread-type "/" message-file "'): os.mkdir('" run-dir "/" spread-type "/" message-file "')")
-py:run (word "if not os.path.isdir('" run-dir "/" spread-type "/" message-file "/" cognitive-fn "'): os.mkdir('" run-dir "/" spread-type "/" message-file "/" cognitive-fn "')")
+py:run (word "if not os.path.isdir('" run-dir "/" brain-type "'): os.mkdir('" run-dir "/" brain-type "')")
+py:run (word "if not os.path.isdir('" run-dir "/" brain-type  "/" spread-type "'): os.mkdir('" run-dir "/" brain-type "/" spread-type "')")
+py:run (word "if not os.path.isdir('" run-dir "/" brain-type  "/" spread-type "/" message-file "'): os.mkdir('" run-dir "/" brain-type "/" spread-type "/" message-file "')")
+py:run (word "if not os.path.isdir('" run-dir "/" brain-type  "/" spread-type "/" message-file "/" cognitive-fn "'): os.mkdir('" run-dir "/" brain-type "/" spread-type "/" message-file "/" cognitive-fn "')")
 py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-dir "')")</setup>
     <go>go</go>
     <final>let rand random 10000
 export-world (word contagion-dir "/" rand "_world.csv")
 export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent-beliefs.csv")</final>
     <metric>count citizens</metric>
+    <enumeratedValueSet variable="brain-type">
+      <value value="&quot;discrete&quot;"/>
+      <value value="&quot;continuous&quot;"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="N">
       <value value="500"/>
     </enumeratedValueSet>

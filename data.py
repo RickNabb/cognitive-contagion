@@ -15,20 +15,25 @@ from scipy.stats import chi2_contingency
 BELIEF ATTRIBUTES
 """
 
-class TestDiscrete(Enum):
-  STRONG_DISBELIEF=0
-  DISBELIEF=1
-  MOD_DISBELIEF=2
-  UNCERTAIN=3
-  MOD_BELIEF=4
-  BELIEF=5
-  STRONG_BELIEF=6
+NUM_BELIEF_BUCKETS = 32
+
+discrete = range(NUM_BELIEF_BUCKETS)
+
+# class TestDiscrete7(Enum):
+#   STRONG_DISBELIEF=12
+#   DISBELIEF=1
+#   MOD_DISBELIEF=2
+#   UNCERTAIN=3
+#   MOD_BELIEF=4
+#   BELIEF=5
+#   STRONG_BELIEF=6
 
 class Attributes(Enum):
-  A = TestDiscrete
+  A = discrete
 
 def attrs_as_array(attr):
-  return map(lambda a: a.value, list(attr.value))
+  # return map(lambda a: a.value, list(attr.value))
+  return attr.value
 
 """
 STATS STUFF
@@ -90,23 +95,25 @@ itself to return the needed dependency.
 :param attr: An attribute from the Attribues enumeration to sample
 its approriate distribution in the empirical data.
 """
-def random_dist_sample(attr, given=None):
-    emp_dist = AttributeDistributions[attr.name]
-    emp_vals = AttributeValues[attr.name]
-    vals = []
-    dist = []
-    if emp_dist['depends_on'] is not None and given is None:
-        depends_sample = random_dist_sample(emp_dist['depends_on'])
-        vals = emp_vals['vals'][depends_sample]
-        dist = emp_dist['dist'][depends_sample]
-    elif emp_dist['depends_on'] is not None and emp_dist['depends_on'] in given:
-        depends_sample = given[emp_dist['depends_on']]
-        vals = emp_vals['vals'][depends_sample]
-        dist = emp_dist['dist'][depends_sample]
-    else:
-        vals = emp_vals['vals']
-        dist = emp_dist['dist']
-    return list(attr.value)[sample_dist(vals, dist)].value
+def random_dist_sample(attr, resolution, given=None):
+    emp_vals = AttributeValues[attr.name]['vals'](resolution)
+    emp_dist = create_discrete_dist_sm(emp_vals)
+    # vals = []
+    # dist = []
+    vals = emp_vals
+    dist = emp_dist
+    # if emp_dist['depends_on'] is not None and given is None:
+    #     depends_sample = random_dist_sample(emp_dist['depends_on'], resolution)
+    #     vals = emp_vals[depends_sample]
+    #     dist = emp_dist[depends_sample]
+    # elif emp_dist['depends_on'] is not None and emp_dist['depends_on'] in given:
+    #     depends_sample = given[emp_dist['depends_on']]
+    #     vals = emp_vals[depends_sample]
+    #     dist = emp_dist[depends_sample]
+    # else:
+    #     vals = emp_vals
+    #     dist = emp_dist
+    return range(resolution)[sample_dist(vals, dist)]
 
 """
 Sample an attribute with an equal distribution over the values.
@@ -134,25 +141,28 @@ HeterophilicThetaRow = lambda row, l, p, s, d: [ (abs(pow(i-row,p)))/(s*pow(max(
 SquareHeterophilicThetaRow = lambda row, l: HeterophilicThetaRow(row, l, 2, 2, 0)
 LinearHeterophilicThetaRow = lambda row, l: HeterophilicThetaRow(row, l, 1, 2, 0)
 
-AVals = [1, 1, 1, 1, 1, 1, 1]
-ADist = create_discrete_dist_sm(AVals)
-AMAGDefaultTheta = np.ones((7,7)) * 0.05
-AMAGHomophilicTheta = np.matrix([ HomophilicThetaRow(i, len(AVals), 2, 50, 5) for i in range(0, len(AVals)) ])
-AMAGHeterophilicTheta = np.matrix([ HeterophilicThetaRow(i, len(AVals), 2, 5, 1) for i in range(0, len(AVals)) ])
+# AVals = np.ones(NUM_BELIEF_BUCKETS) #[1, 1, 1, 1, 1, 1, 1]
+# ADist = create_discrete_dist_sm(AVals)
+AMAGDefaultTheta = lambda resolution: np.ones((resolution,resolution)) * 0.05
+AMAGHomophilicTheta = lambda resolution: np.matrix([ HomophilicThetaRow(i, resolution, 2, 50, 5) for i in range(0, resolution) ])
+AMAGHeterophilicTheta = lambda resolution: np.matrix([ HeterophilicThetaRow(i, resolution, 2, 5, 1) for i in range(0, resolution) ])
+
+def uniform_dist(resolution):
+  return np.ones(resolution)
 
 AttributeValues = {
   Attributes.A.name: {
-    "vals": AVals,
+    "vals": uniform_dist,
     "depends_on": None
   }
 }
 
-AttributeDistributions = {
-  Attributes.A.name: {
-    "dist": ADist,
-    "depends_on": None
-  }
-}
+# AttributeDistributions = {
+#   Attributes.A.name: {
+#     "dist": ADist,
+#     "depends_on": None
+#   }
+# }
 
 AttributeMAGThetas = {
   Attributes.A.name: {
@@ -757,6 +767,108 @@ def pi_data_charts(stats_data, attr, replace, title_w_replace, path_w_replace):
   for key in pi_keys:
     plot_stats_means(stats_data[key][attr], title_w_replace.replace(replace, str(key)), path_w_replace.replace(replace, f'{key[0]}-{key[1]}'))
 
+def corr_multi_data(multi_data_1, multi_data_2, method='pearson'):
+  '''
+  Calculate correlations between two sets of multi data.
+
+  :param multi_data_1: A first set of data over multiple simulation runs, keyed by agent belief value.
+  :param multi_data_2: A second set of data over multiple simulation runs, keyed by agent belief value.
+
+  :return: Correlation values per belief value.
+  '''
+  m1_means = { key: multi_data_1[key].mean(0) for key in multi_data_1 }
+  m2_means = { key: multi_data_2[key].mean(0) for key in multi_data_2 }
+
+  rs = {}
+  for key in multi_data_1:
+    df = pd.DataFrame({ 'data1': m1_means[key], 'data2': m2_means[key] })
+    # Uncomment if you need to investigate the df
+    # rs[key] = {}
+    # rs[key]['df'] = df
+    # rs[key]['corr'] = df.corr(method=method).iloc[0,1]
+    rs[key] = df.corr(method=method).iloc[0,1]
+  return rs
+
+def aggregate_corr(corr_by_bel):
+  '''
+  Generate an average correlation across correlations by belief value.
+
+  :param corr_by_bel: A dictionary keyed by belief value of correlation values.
+  '''
+  non_nan = np.array(list(corr_by_bel.values()))
+  non_nan = non_nan[np.logical_not(np.isnan(non_nan))]
+  return non_nan.sum() / len(non_nan)
+
+def chi_sq_test_multi_data(multi_data_1, multi_data_2, N):
+  '''
+  Perform a chi squared test on two sets of multi data for each timestep in the simulation data. 
+
+  NOTE: This converts agent population percentages to total numbers and pads by 1
+  in order to circumnavigate sampling 0 agents.
+
+  :param multi_data_1: A first set of data over multiple simulation runs, keyed by agent belief value.
+  :param multi_data_2: A second set of data over multiple simulation runs, keyed by agent belief value.
+  :param N: The number of agents in the simulation.
+
+  :returns: Returns the chi2 timeseries data.
+  '''
+
+  m1_means = [ multi_data_1[key].mean(0) for key in multi_data_1 ]
+  m2_means = [ multi_data_2[key].mean(0) for key in multi_data_2 ]
+
+  data = []
+  for timestep in range(len(m1_means[0])):
+    data.append([])
+    # Append on lists of the values for each belief at timestep t 
+    data[timestep].append([ m1_means[bel][timestep] for bel in range(len(m1_means)) ])
+    data[timestep].append([ m2_means[bel][timestep] for bel in range(len(m2_means)) ])
+  
+  for data_t in data:
+    for i in range(len(data_t[0])):
+      data_t[0][i] = round(N * data_t[0][i] + 1)
+      data_t[1][i] = round(N * data_t[1][i] + 1)
+  
+  chi2_data = [ chi2_contingency(data_t) for data_t in data ]
+  return chi2_data
+
+def chi_sq_global(chi2_data):
+  '''
+  Convert a timeseries of chi squared test data into a global measure of how many
+  entries in the time series are statistically independent. Higher values indicate
+  higher levels of independence.
+
+  :param chi2_data: An array of timeseries chi squared data from the scipy test.
+  '''
+  data = np.array([ el[1] for el in chi2_data ])
+  return (data <= 0.05).sum() / len(data)
+
+
+def plot_chi_sq_data(chi2_data, props, title, out_path, out_filename):
+  '''
+  Plot a time series calculation of chi squared measures per timestep.
+
+  :param chi2_data: The timeseries data from running chi squared stats on belief data.
+  :param props: The simulation properties to pull time data from.
+  :param title: Text to title the plot with.
+  '''
+  # series = pd.Series(data)
+  fig, (ax) = plt.subplots(1, figsize=(8,6))
+  # ax, ax2 = fig.add_subplot(2)
+  ax.set_ylim([0, 1.0])
+  y_min = 0
+  y_max = 1.0
+  x_min = int(props['x min'])
+  x_max = int(props['x max'])
+  plt.yticks(np.arange(y_min, y_max+0.2, step=0.05))
+  plt.xticks(np.arange(x_min, x_max+10, step=10))
+  ax.set_ylabel("p value")
+  ax.set_xlabel("Time Step")
+  ax.set_title(f'{title}')
+ 
+  ax.plot([ data[1] for data in chi2_data ])
+  plt.savefig(f'{out_path}/{out_filename}')
+  plt.close()
+
 """
 ##################
 EXPERIMENT-SPECIFIC
@@ -819,34 +931,51 @@ def process_graph_exp_outputs(path):
           (multi_data, props, model_params) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
           plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
 
-def chi_sq_test_multi_data(multi_data_1, multi_data_2, N):
-  '''
-  Perform a chi squared test on two sets of multi data for each timestep in the simulation data. 
+'''
+Do statistical correlation measures for the between-graphs experiments
+'''
+def stats_on_graph_exp_outputs(path, generate_graphs=True):
+  contagion_types = [ 'simple', 'complex', 'cognitive' ]
+  cognitive_fns = [ 'sigmoid-stubborn' ]
+  message_files = [ 'default' ]
+  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert', 'mag' ]
 
-  NOTE: This converts agent population percentages to total numbers and pads by 1
-  in order to circumnavigate sampling 0 agents.
+  if not os.path.isdir(f'{path}/results'):
+    os.mkdir(f'{path}/results')
 
-  :param multi_data_1: A first set of data over multiple simulation runs, keyed by agent belief value.
-  :param multi_data_2: A second set of data over multiple simulation runs, keyed by agent belief value.
-  :param N: The number of agents in the simulation.
+  multi_datas = {}
+  results = pd.DataFrame()
+  for ct in contagion_types:
+    for cf in cognitive_fns:
+      for mf in message_files:
+        for gt in graph_types:
+          # For now, since there are no differences in cf and mf...
+          # returns in form of (multi_data, props, model_params)
+          multi_datas[(ct,gt)] = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
 
-  :returns: Returns the chi2 timeseries data.
-  '''
+  for ct in contagion_types:
+    gt_by_gt = itertools.product(graph_types, repeat=2)
+    for pair in gt_by_gt:
+      if pair[0] is pair[1]: continue
+      key_1 = (ct,pair[0])
+      key_2 = (ct,pair[1])
+      multi_data_1 = multi_datas[key_1][0]
+      multi_data_2 = multi_datas[key_2][0]
+      sim_props = multi_datas[key_1][2]
 
-  m1_means = [ multi_data_1[key].mean(0) for key in multi_data_1 ]
-  m2_means = [ multi_data_2[key].mean(0) for key in multi_data_2 ]
+      result = {'contagion_type': ct, 'graph_1': pair[0], 'graph_2': pair[1]}
 
-  data = []
-  for timestep in range(len(m1_means[0])):
-    data.append([])
-    # Append on lists of the values for each belief at timestep t 
-    data[timestep].append([ m1_means[bel][timestep] for bel in range(len(m1_means)) ])
-    data[timestep].append([ m2_means[bel][timestep] for bel in range(len(m2_means)) ])
+      # Run Chi-squared tests
+      chi2_data = chi_sq_test_multi_data(multi_data_1, multi_data_2, int(sim_props['n']))
+      # results[ct_gt_key]['chi2_data'] = chi2_data
+      result['chi2_global'] = chi_sq_global(chi2_data)
+
+      if generate_graphs:
+        plot_chi_sq_data(chi2_data, multi_datas[key_1][1], f'{ct} contagion on {pair[0]} x {pair[1]}', f'{path}/results', f'chi2_{ct}_{pair[0]}-{pair[1]}.png')
   
-  for data_t in data:
-    for i in range(len(data_t[0])):
-      data_t[0][i] = round(N * data_t[0][i] + 1)
-      data_t[1][i] = round(N * data_t[1][i] + 1)
-  
-  chi2_data = [ chi2_contingency(data_t) for data_t in data ]
-  return chi2_data
+      # Run Pearson correlation tests
+      result['pearson'] = corr_multi_data(multi_data_1, multi_data_2)
+      result['pearson_avg'] = aggregate_corr(result['pearson'])
+      results = results.append(result, ignore_index=True)
+
+  return results
