@@ -440,18 +440,24 @@ def plot_nlogo_multi_chart_stacked(props, multi_data):
   ax.set_ylabel("Portion of agents who believe b")
   ax.set_xlabel("Time Step")
 
-  line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
+  multi_data_keys_int = list(map(lambda el: int(el), multi_data.keys()))
+
+  # line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(round(float(props['color'][key])))])}"
+  resolution = int(max(multi_data_keys_int))+1
+  line_color = lambda key: f"#{rgb_to_hex([ 255 - round((255/(resolution-1))*int(key)), 0, round((255/(resolution-1)) * int(key)) ])}"
   
   mean_vecs = []
   var_vecs = []
-  for key in multi_data:
+  rev_keys_int = sorted(multi_data_keys_int, reverse=True)
+  rev_keys = list(map(lambda el: f'{el}', rev_keys_int))
+  for key in rev_keys:
     mean_vec = multi_data[key].mean(0)
     var_vec = multi_data[key].var(0)
     mean_vecs.append(mean_vec)
     var_vecs.append(var_vec)
   
   ax.set_xlim([0,len(mean_vecs[0])])
-  plt.stackplot(range(x_min, len(mean_vecs[0])), mean_vecs, colors=[ f'{line_color(c)}' for c in multi_data.keys() ], labels=[ f'b = {b}' for b in multi_data.keys() ])
+  plt.stackplot(range(x_min, len(mean_vecs[0])), mean_vecs, colors=[ f'{line_color(c)}' for c in rev_keys ], labels=[ f'b = {b}' for b in rev_keys ])
 
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot
@@ -475,8 +481,11 @@ def plot_nlogo_multi_chart_line(props, multi_data):
   plt.xticks(np.arange(x_min, x_max+10, step=10))
   ax.set_ylabel("% of agents who believe b")
   ax.set_xlabel("Time Step")
+
+  multi_data_keys_int = list(map(lambda el: int(el), multi_data.keys()))
+  resolution = int(max(multi_data_keys_int))+1
+  line_color = lambda key: f"#{rgb_to_hex([ 255 - round((255/(resolution-1))*int(key)), 0, round((255/(resolution-1)) * int(key)) ])}"
  
-  line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(props['color'][key])])}"
   for key in multi_data:
     mean_vec = multi_data[key].mean(0)
     var_vec = multi_data[key].var(0)
