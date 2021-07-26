@@ -5,6 +5,8 @@ from data import *
 from random import *
 from copy import deepcopy
 import sys
+from enum import Enum
+import os
 
 """
 MESSAGES
@@ -327,3 +329,59 @@ def read_message_over_time_data(path):
           messages[t] = data[last_valid_t]
     f.close()
     return messages
+
+'''
+UTILITY FUNCTIONS
+'''
+
+class INSTITUTION_MESSAGING_TYPES(Enum):
+  DEFAULT = 0
+  SPLIT = 1
+  GRADUAL = 2
+
+file_names = {
+  INSTITUTION_MESSAGING_TYPES.DEFAULT: 'default',
+  INSTITUTION_MESSAGING_TYPES.SPLIT: '50-50',
+  INSTITUTION_MESSAGING_TYPES.GRADUAL: 'gradual',
+}
+
+def generate_messaging_patterns(start, stop, m_type, resolution, bel, out_path):
+  '''
+  Create JSON files for messaging patterns to be used by instituional agents
+  for experiments.
+  NOTE: This only includes files that use ONE belief (specified by `bel`) -- this
+  should be modified to include more complex belief objects.
+
+  :param start: Integer start timestep value for the simulation
+  :param stop: Integer end timestep value for the simulation
+  :param m_type: INSTITUTIONAL_MESSAGING_TYPES value for a pattern to use
+  :param resolution: Integer belief resolution (must be >= stop)
+  :param bel: String belief key to make messages for
+  :param out_path: String path to make messaging files in
+  '''
+
+  if not os.path.isdir(f'{out_path}/{resolution}'):
+    os.mkdir(f'{out_path}/{resolution}')
+
+  f = open(f'{out_path}/{resolution}/{file_names[m_type]}.json', 'w')
+  
+  pattern_obj = { 'start': start, 'stop': stop }
+  if m_type == INSTITUTION_MESSAGING_TYPES.DEFAULT:
+    pattern_obj[f'{start}'] = {
+      'BEL': [ { f'{bel}': resolution-1 } ]
+    }
+  elif m_type == INSTITUTION_MESSAGING_TYPES.SPLIT:
+    pattern_obj[f'{start}'] = {
+      'BEL': [ { f'{bel}': resolution-1 } ]
+    }
+    pattern_obj[f'{round(stop/2)}'] = {
+      'BEL': [ { f'{bel}': 0 } ]
+    }
+  elif m_type == INSTITUTION_MESSAGING_TYPES.GRADUAL:
+    step = math.floor(stop / resolution)
+    for t in range(start, stop, step):
+      pattern_obj[f'{t}'] = {
+        'BEL': [ { f'{bel}': resolution-math.floor((resolution/stop)*t) } ]
+      }
+  f.write(json.dumps(pattern_obj))
+  f.close()
