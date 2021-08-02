@@ -427,6 +427,8 @@ describes pen colors, x and y min and max, etc.
 :param multi_data: A dictionary (keyed by line) of matrices where each row is one simulation's worth of data points.
 '''
 def plot_nlogo_multi_chart_stacked(props, multi_data):
+  init_dist_width = 10
+
   # series = pd.Series(data)
   fig, (ax) = plt.subplots(1, figsize=(8,6))
   # ax, ax2 = fig.add_subplot(2)
@@ -440,9 +442,13 @@ def plot_nlogo_multi_chart_stacked(props, multi_data):
   ax.set_ylabel("Portion of agents who believe b")
   ax.set_xlabel("Time Step")
 
+
   multi_data_keys_int = list(map(lambda el: int(el), multi_data.keys()))
 
+  # To use Netlogo colors
   # line_color = lambda key: f"#{rgb_to_hex(NLOGO_COLORS[int(round(float(props['color'][key])))])}"
+
+  # To use higher resolution colors
   resolution = int(max(multi_data_keys_int))+1
   line_color = lambda key: f"#{rgb_to_hex([ 255 - round((255/(resolution-1))*int(key)), 0, round((255/(resolution-1)) * int(key)) ])}"
   
@@ -453,11 +459,15 @@ def plot_nlogo_multi_chart_stacked(props, multi_data):
   for key in rev_keys:
     mean_vec = multi_data[key].mean(0)
     var_vec = multi_data[key].var(0)
+
+    # Add padding for the initial values so those are displayed in the graph
+    mean_vec = np.insert(mean_vec, 0, [ mean_vec[0] for i in range(init_dist_width) ])
+
     mean_vecs.append(mean_vec)
     var_vecs.append(var_vec)
   
-  ax.set_xlim([0,len(mean_vecs[0])])
-  plt.stackplot(range(x_min, len(mean_vecs[0])), mean_vecs, colors=[ f'{line_color(c)}' for c in rev_keys ], labels=[ f'b = {b}' for b in rev_keys ])
+  ax.set_xlim([x_min-init_dist_width,len(mean_vecs[0])-init_dist_width])
+  plt.stackplot(range(x_min-init_dist_width, len(mean_vecs[0])-init_dist_width), mean_vecs, colors=[ f'{line_color(c)}' for c in rev_keys ], labels=[ f'b = {b}' for b in rev_keys ])
 
 '''
 Plot multiple NetLogo chart data sets on a single plot. This will scatterplot
@@ -838,7 +848,9 @@ def chi_sq_test_multi_data(multi_data_1, multi_data_2, N):
       data_t[1][i] = round(N * data_t[1][i] + 1)
   
   chi2_data = [ chi2_contingency(data_t) for data_t in data ]
-  return chi2_data
+  # TODO: CHANGE THIS BACK
+  # return chi2_data
+  return (data, chi2_data)
 
 def chi_sq_global(chi2_data):
   '''
@@ -925,20 +937,87 @@ Process data for the between-graphs experiments: those that run...
   CONTAGION_METHOD X MESSAGES X GRAPH_TYPE
 '''
 def process_graph_exp_outputs(path):
+  # brain_types = ['discrete', 'continuous']
+  brain_types = ['discrete']
   contagion_types = [ 'simple', 'complex', 'cognitive' ]
   cognitive_fns = [ 'sigmoid-stubborn' ]
   message_files = [ '50-50', 'default', 'gradual' ]
   graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert', 'mag' ]
 
-  if not os.path.isdir(f'{path}/results'):
-    os.mkdir(f'{path}/results')
+  for bt in brain_types:
+    if not os.path.isdir(f'{path}/{bt}/results'):
+      os.mkdir(f'{path}/{bt}/results')
+    for ct in contagion_types:
+      for cf in cognitive_fns:
+        for mf in message_files:
+          for gt in graph_types:
+              (multi_data, props, model_params) = process_multi_chart_data(f'{path}/{bt}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
+              plot_multi_chart_data(multi_data, props, f'{path}/{bt}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
 
-  for ct in contagion_types:
-    for cf in cognitive_fns:
+'''
+Process data for the between-graphs experiments: those that run...
+  CONTAGION_METHOD X MESSAGES X GRAPH_TYPE
+'''
+def process_graph_exp_outputs_w_res(path):
+  resolutions = [2, 3, 5, 7, 9, 16, 32, 64]
+  # brain_types = ['discrete', 'continuous']
+  brain_types = ['discrete']
+  contagion_types = [ 'simple', 'complex', 'cognitive' ]
+  cognitive_fns = [ 'sigmoid-stubborn' ]
+  message_files = [ '50-50', 'default', 'gradual' ]
+  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert', 'mag' ]
+
+  for bt in brain_types:
+    for ct in contagion_types:
+      for cf in cognitive_fns:
+        for mf in message_files:
+          for gt in graph_types:
+            for res in resolutions: 
+              if not os.path.isdir(f'{path}-{res}/{bt}/results'):
+                os.mkdir(f'{path}-{res}/{bt}/results')
+              (multi_data, props, model_params) = process_multi_chart_data(f'{path}-{res}/{bt}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
+              plot_multi_chart_data(multi_data, props, f'{path}-{res}/{bt}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
+
+def simple_contagion_param_test(multi_data):
+  '''
+  Perform a check to see when the means of a multi_data timeseries for belief
+  value 6 cross a threshold of 0.95 (adopted by most of the population).
+
+  :param multi_data: A dictionary of timeseries data arrays keyed by belief value.
+  '''
+  threshold = 0.9
+  data = multi_data['6'].mean(0)
+  t = np.where(data > threshold)
+  # return above_threshold
+  return t[0][0] if t[0].size > 0 else -1
+
+'''
+Process data for the simple contagion param experiments
+'''
+def process_contagion_param_outputs(path):
+  # resolutions = [2, 3, 5, 7, 9, 16, 32, 64]
+  # brain_types = ['discrete', 'continuous']
+  param_vals = [ i/100 for i in range(5, 100, 5) ]
+  brain_types = ['discrete']
+  # message_files = [ '50-50', 'default', 'gradual' ]
+  message_files = [ 'default' ]
+  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert' ]
+
+  param_sweep_df = []
+  for pv in param_vals:
+    for bt in brain_types:
+      if not os.path.isdir(f'{path}/{bt}'):
+        os.mkdir(f'{path}/{bt}')
+      if not os.path.isdir(f'{path}/{bt}/results'):
+        os.mkdir(f'{path}/{bt}/results')
       for mf in message_files:
+        param_sweep_values = {'p': pv}
         for gt in graph_types:
-          (multi_data, props, model_params) = process_multi_chart_data(f'{path}/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
-          plot_multi_chart_data(multi_data, props, f'{path}/results',f'{ct}-{mf}-{cf}-{gt}-agg-chart')
+          (multi_data, props, model_params) = process_multi_chart_data(f'{path}/{pv}/{bt}/{mf}/{gt}', 'percent-agent-beliefs')
+          # plot_multi_chart_data(multi_data, props, f'{path}/{bt}/results',f'{pv}-{mf}-{gt}-agg-chart')
+          param_sweep_values[gt] = simple_contagion_param_test(multi_data)
+        param_sweep_df.append(param_sweep_values)
+  return pd.DataFrame(param_sweep_df)
 
 '''
 Do statistical correlation measures for the between-graphs experiments
@@ -986,5 +1065,62 @@ def stats_on_graph_exp_outputs(path, generate_graphs=True):
       result['pearson'] = corr_multi_data(multi_data_1, multi_data_2)
       result['pearson_avg'] = aggregate_corr(result['pearson'])
       results = results.append(result, ignore_index=True)
+
+  return results
+
+'''
+Do statistical correlation measures for the between-simulation run experiments
+'''
+def stats_on_simulation_run_outputs(path, generate_graphs=True):
+  contagion_types = [ 'simple', 'complex', 'cognitive' ]
+  cognitive_fns = [ 'sigmoid-stubborn' ]
+  message_files = [ 'default', '50-50', 'gradual' ]
+  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert', 'mag' ]
+  simulation_runs = [10, 50, 100]
+
+  multi_datas = {}
+  results = pd.DataFrame()
+  for sr in simulation_runs:
+    for ct in contagion_types:
+      for cf in cognitive_fns:
+        for mf in message_files:
+          for gt in graph_types:
+            # For now, since there are no differences in cf...
+            # returns in form of (multi_data, props, model_params)
+            multi_datas[(ct,mf,gt,sr)] = process_multi_chart_data(f'{path}-{sr}/discrete/{ct}/{mf}/{cf}/{gt}', 'percent-agent-beliefs')
+
+  for ct in contagion_types:
+    for mf in message_files:
+      for gt in graph_types:
+        sr_by_sr = itertools.product(simulation_runs, repeat=2)
+        res_set = []
+        for pair in sr_by_sr:
+          if pair[0] is pair[1]: continue
+          if {pair[0], pair[1]} in res_set: continue
+          key_1 = (ct,mf,gt,pair[0])
+          key_2 = (ct,mf,gt,pair[1])
+          multi_data_1 = multi_datas[key_1][0]
+          multi_data_2 = multi_datas[key_2][0]
+          sim_props = multi_datas[key_1][2]
+
+          result = {'contagion_type': ct, 'message_file': mf, 'graph_type': gt, 'sim_runs_1': pair[0], 'sim_runs_2': pair[1]}
+
+          # Run Chi-squared tests
+          (pre_chi2_data, chi2_data) = chi_sq_test_multi_data(multi_data_1, multi_data_2, int(sim_props['n']))
+          result['pre_chi2'] = pre_chi2_data
+          result['chi2_data'] = chi2_data
+          result['chi2_global'] = chi_sq_global(chi2_data)
+
+          if generate_graphs:
+            if not os.path.isdir(f'{path}-{pair[0]}-{pair[1]}'):
+              os.mkdir(f'{path}-{pair[0]}-{pair[1]}')
+              os.mkdir(f'{path}-{pair[0]}-{pair[1]}/results')
+            plot_chi_sq_data(chi2_data, multi_datas[key_1][1], f'{ct} contagion on {pair[0]} x {pair[1]}', f'{path}-{pair[0]}-{pair[1]}/results', f'chi2_{ct}-{mf}-{gt}-{pair[0]}-{pair[1]}.png')
+  
+          # Run Pearson correlation tests
+          result['pearson'] = corr_multi_data(multi_data_1, multi_data_2)
+          result['pearson_avg'] = aggregate_corr(result['pearson'])
+          results = results.append(result, ignore_index=True)
+          res_set.append({pair[0], pair[1]})
 
   return results
