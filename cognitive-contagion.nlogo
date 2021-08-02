@@ -82,7 +82,9 @@ to setup
   ]
 
   ;; Load message data sets to be used by the influencer agents
-  set messages-over-time load-messages-over-time (word messages-data-path "/" message-file ".json")
+  if media-agents? [
+    set messages-over-time load-messages-over-time (word messages-data-path "/") (word message-file ".json")
+  ]
 
   ;; Layout turtles
   let max_turtle max-one-of turtles [ count social-friend-neighbors ]
@@ -114,7 +116,6 @@ to setup-py
   py:run "import os"
   py:run "import kronecker as kron"
   py:run "from data import *"
-  py:run (word "NUM_BELIEF_BUCKETS = " belief-resolution)
   py:run "from messaging import *"
   py:run "import mag as MAG"
   py:run "from nlogo_graphs import *"
@@ -175,7 +176,8 @@ to create-media
 
     ; Belief
     create-medias 1 [
-      set media-attrs [ ["A" 6] ]
+      set media-attrs []
+      set media-attrs lput (list "A" (belief-resolution - 1)) media-attrs
       set cur-message-id 0
       set messages-sent []
       setxy -4 1
@@ -306,7 +308,7 @@ to set-cognitive-contagion-params
   ;; Threshold t
   let t 1
   if cognitive-fn = "sigmoid-gullible" [
-    set t 6
+    set t belief-resolution
     set cognitive-scalar? false
     set cognitive-exponent? true
     set cognitive-translate? true
@@ -314,7 +316,7 @@ to set-cognitive-contagion-params
     set cognitive-translate t + 1
   ]
   if cognitive-fn = "sigmoid-mid" [
-    set t 2
+    set t (belief-resolution * 2 / 7)
     set cognitive-scalar? false
     set cognitive-exponent? true
     set cognitive-translate? true
@@ -322,7 +324,7 @@ to set-cognitive-contagion-params
     set cognitive-translate t + 1
   ]
   if cognitive-fn = "sigmoid-stubborn" [
-    set t 1
+    set t ceiling (belief-resolution / 7)
     set cognitive-scalar? false
     set cognitive-exponent? true
     set cognitive-translate? true
@@ -727,9 +729,12 @@ end
 ;; NOTE: For procedures that simply report back what comes from a python function, please refer
 ;; to the python function itself for function details.
 
-to-report load-messages-over-time [ path ]
+to-report load-messages-over-time [ path filename ]
+  if not file-exists? (word path "/" belief-resolution) [
+    error "Messaging directory does not exist for current resolution"
+  ]
   report py:runresult(
-    word "read_message_over_time_data('" path "')"
+    word "read_message_over_time_data('" path "/" belief-resolution "/" filename "')"
   )
 end
 
@@ -1361,7 +1366,7 @@ SLIDER
 epsilon
 epsilon
 0
-10
+100
 0.0
 0.1
 1
@@ -1479,7 +1484,7 @@ SWITCH
 132
 show-social-friends?
 show-social-friends?
-0
+1
 1
 -1000
 
@@ -1529,7 +1534,7 @@ CHOOSER
 spread-type
 spread-type
 "simple" "complex" "cognitive"
-2
+0
 
 TEXTBOX
 302
@@ -1610,7 +1615,7 @@ simple-spread-chance
 simple-spread-chance
 0
 1
-0.2
+0.95
 0.01
 1
 NIL
@@ -1759,7 +1764,7 @@ SWITCH
 308
 media-agents?
 media-agents?
-1
+0
 1
 -1000
 
@@ -1823,8 +1828,8 @@ SLIDER
 cognitive-translate
 cognitive-translate
 -10
-10
-2.0
+20
+11.0
 1
 1
 NIL
@@ -1859,7 +1864,7 @@ CHOOSER
 graph-type
 graph-type
 "erdos-renyi" "watts-strogatz" "barabasi-albert" "mag" "facebook"
-1
+2
 
 SLIDER
 437
@@ -1968,7 +1973,7 @@ SWITCH
 771
 contagion-on?
 contagion-on?
-0
+1
 1
 -1000
 
@@ -1976,7 +1981,7 @@ SLIDER
 497
 99
 670
-133
+132
 belief-resolution
 belief-resolution
 0
@@ -2390,10 +2395,10 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
       <value value="&quot;erdos-renyi&quot;"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="graph-exp" repetitions="100" sequentialRunOrder="false" runMetricsEveryStep="false">
+  <experiment name="graph-exp" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="false">
     <setup>setup
 set-cognitive-contagion-params
-let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe))
+let run-dir (word sim-output-dir substring date-time-safe 11 (length date-time-safe) "-" belief-resolution)
 set contagion-dir (word run-dir "/" brain-type "/" spread-type "/" message-file "/" cognitive-fn "/" graph-type)
 py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
 py:run (word "if not os.path.isdir('" run-dir "/" brain-type "'): os.mkdir('" run-dir "/" brain-type "')")
@@ -2406,9 +2411,12 @@ py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-d
 export-world (word contagion-dir "/" rand "_world.csv")
 export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent-beliefs.csv")</final>
     <metric>count citizens</metric>
+    <enumeratedValueSet variable="belief-resolution">
+      <value value="32"/>
+      <value value="64"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="brain-type">
       <value value="&quot;discrete&quot;"/>
-      <value value="&quot;continuous&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="N">
       <value value="500"/>
@@ -2449,6 +2457,42 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
       <value value="&quot;barabasi-albert&quot;"/>
       <value value="&quot;watts-strogatz&quot;"/>
       <value value="&quot;mag&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="simple-parameter-analysis" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+let run-dir (word sim-output-dir "/simple-param-analysis/" substring date-time-safe 11 (length date-time-safe) "-" belief-resolution)
+set contagion-dir (word run-dir "/" simple-spread-chance "/" brain-type "/" message-file "/" graph-type)
+py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
+py:run (word "if not os.path.isdir('" run-dir "/" simple-spread-chance "'): os.mkdir('" run-dir "/" simple-spread-chance "')")
+py:run (word "if not os.path.isdir('" run-dir "/" simple-spread-chance "/" brain-type "'): os.mkdir('" run-dir "/" simple-spread-chance "/" brain-type "')")
+py:run (word "if not os.path.isdir('" run-dir "/" simple-spread-chance "/" brain-type "/" message-file "'): os.mkdir('" run-dir "/" simple-spread-chance "/" brain-type "/" message-file "')")
+py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-dir "')")</setup>
+    <go>go</go>
+    <final>let rand random 10000
+export-world (word contagion-dir "/" rand "_world.csv")
+export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent-beliefs_" simple-spread-chance ".csv")</final>
+    <metric>count turtles</metric>
+    <steppedValueSet variable="simple-spread-chance" first="0.05" step="0.05" last="0.95"/>
+    <enumeratedValueSet variable="belief-resolution">
+      <value value="7"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="brain-type">
+      <value value="&quot;discrete&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="N">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spread-type">
+      <value value="&quot;simple&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="message-file">
+      <value value="&quot;default&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="graph-type">
+      <value value="&quot;erdos-renyi&quot;"/>
+      <value value="&quot;watts-strogatz&quot;"/>
+      <value value="&quot;barabasi-albert&quot;"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
