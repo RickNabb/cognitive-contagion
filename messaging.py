@@ -378,10 +378,11 @@ def generate_messaging_patterns(start, stop, m_type, resolution, bel, out_path):
       'BEL': [ { f'{bel}': 0 } ]
     }
   elif m_type == INSTITUTION_MESSAGING_TYPES.GRADUAL:
-    step = math.floor(stop / resolution)
-    for t in range(start, stop, step):
+    buckets = 6
+    step = math.floor(60 / buckets)
+    for t in range(start, 61, step):
       pattern_obj[f'{t}'] = {
-        'BEL': [ { f'{bel}': resolution-math.floor((resolution/stop)*t) } ]
+        'BEL': [ { f'{bel}': (resolution-1) - math.floor(((resolution-1) / buckets) * (t / step)) } ]
       }
   f.write(json.dumps(pattern_obj))
   f.close()
