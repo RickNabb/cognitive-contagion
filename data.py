@@ -1097,8 +1097,9 @@ def stats_on_simulation_run_outputs(path, generate_graphs=True):
         for pair in sr_by_sr:
           if pair[0] is pair[1]: continue
           if {pair[0], pair[1]} in res_set: continue
-          key_1 = (ct,mf,gt,pair[0])
-          key_2 = (ct,mf,gt,pair[1])
+          key_1 = (ct,mf,gt,pv,pair[0])
+          key_2 = (ct,mf,gt,pv,pair[1])
+
           multi_data_1 = multi_datas[key_1][0]
           multi_data_2 = multi_datas[key_2][0]
           sim_props = multi_datas[key_1][2]
@@ -1116,11 +1117,84 @@ def stats_on_simulation_run_outputs(path, generate_graphs=True):
               os.mkdir(f'{path}-{pair[0]}-{pair[1]}')
               os.mkdir(f'{path}-{pair[0]}-{pair[1]}/results')
             plot_chi_sq_data(chi2_data, multi_datas[key_1][1], f'{ct} contagion on {pair[0]} x {pair[1]}', f'{path}-{pair[0]}-{pair[1]}/results', f'chi2_{ct}-{mf}-{gt}-{pair[0]}-{pair[1]}.png')
-  
+
           # Run Pearson correlation tests
           result['pearson'] = corr_multi_data(multi_data_1, multi_data_2)
           result['pearson_avg'] = aggregate_corr(result['pearson'])
           results = results.append(result, ignore_index=True)
           res_set.append({pair[0], pair[1]})
 
+  return results
+
+'''
+Do statistical correlation measures for the between-simulation run experiments
+'''
+def correlations_on_param_sweep(path, generate_graphs=True):
+  # For simple contagion
+  # message_files = [ 'default' ]
+
+  # For complex contagion
+  message_files = [ 'gradual' ]
+
+  graph_types = [ 'erdos-renyi', 'watts-strogatz', 'barabasi-albert' ]
+
+  simulation_runs = [10, 50, 100]
+  param_vals = [ i/100 for i in range(5, 100, 5) ]
+
+  multi_datas = {}
+  results = pd.DataFrame()
+  for sr in simulation_runs:
+    for mf in message_files:
+      for gt in graph_types:
+        # For now, since there are no differences in cf...
+        # returns in form of (multi_data, props, model_params)
+        for pv in param_vals:
+          multi_datas[(mf,gt,pv,sr)] = process_multi_chart_data(f'{path}-{sr}/{str(pv)}/discrete/{mf}/{gt}', 'percent-agent-beliefs')
+
+  for mf in message_files:
+    for gt in graph_types:
+      for pv in param_vals:
+        sr_by_sr = itertools.product(simulation_runs, repeat=2)
+        res_set = []
+        for pair in sr_by_sr:
+          if pair[0] is pair[1]: continue
+          if {pair[0], pair[1]} in res_set: continue
+          
+          key_1 = (mf,gt,pv,pair[0])
+          key_2 = (mf,gt,pv,pair[1])
+          multi_data_1 = multi_datas[key_1][0]
+          multi_data_2 = multi_datas[key_2][0]
+
+          sim_props = multi_datas[key_1][2]
+
+          if not os.path.isdir(f'{path}-{pair[0]}/results'):
+            os.mkdir(f'{path}-{pair[0]}/results')
+          plot_multi_chart_data(multi_data_1, multi_datas[key_1][1], f'{path}-{pair[0]}/results',f'{pv}-{mf}-{gt}-agg-chart')
+
+          if not os.path.isdir(f'{path}-{pair[1]}/results'):
+            os.mkdir(f'{path}-{pair[1]}/results')
+          plot_multi_chart_data(multi_data_2, multi_datas[key_2][1], f'{path}-{pair[1]}/results',f'{pv}-{mf}-{gt}-agg-chart')
+
+          result = {'param_val': pv, 'message_file': mf, 'graph_type': gt, 'sim_runs_1': pair[0], 'sim_runs_2': pair[1]}
+
+          # Run Chi-squared tests
+          (pre_chi2_data, chi2_data) = chi_sq_test_multi_data(multi_data_1, multi_data_2, int(sim_props['n']))
+          result['pre_chi2'] = pre_chi2_data
+          result['chi2_data'] = chi2_data
+          result['chi2_global'] = chi_sq_global(chi2_data)
+
+          if generate_graphs:
+            if not os.path.isdir(f'{path}-{pair[0]}-{pair[1]}'):
+              os.mkdir(f'{path}-{pair[0]}-{pair[1]}')
+              os.mkdir(f'{path}-{pair[0]}-{pair[1]}/{pv}')
+              os.mkdir(f'{path}-{pair[0]}-{pair[1]}/{pv}/results')
+            plot_chi_sq_data(chi2_data, multi_datas[key_1][1], f'contagion on {pair[0]} x {pair[1]}', f'{path}-{pair[0]}-{pair[1]}/{pv}/results', f'chi2_simple-{mf}-{gt}-{pair[0]}-{pair[1]}.png')
+
+          # Run Pearson correlation tests
+          result['pearson'] = corr_multi_data(multi_data_1, multi_data_2)
+          result['pearson_avg'] = aggregate_corr(result['pearson'])
+          results = results.append(result, ignore_index=True)
+          res_set.append({pair[0], pair[1]})
+
+  results.to_csv(f'{path}.csv')
   return results
