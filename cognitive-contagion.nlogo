@@ -1534,7 +1534,7 @@ CHOOSER
 spread-type
 spread-type
 "simple" "complex" "cognitive"
-0
+1
 
 TEXTBOX
 302
@@ -1630,7 +1630,7 @@ complex-spread-ratio
 complex-spread-ratio
 0
 1
-0.35
+0.95
 0.01
 1
 NIL
@@ -1755,7 +1755,7 @@ CHOOSER
 message-file
 message-file
 "default" "50-50" "gradual"
-0
+2
 
 SWITCH
 27
@@ -2459,7 +2459,7 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
       <value value="&quot;mag&quot;"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="simple-parameter-analysis" repetitions="10" runMetricsEveryStep="true">
+  <experiment name="simple-parameter-analysis" repetitions="100" runMetricsEveryStep="false">
     <setup>setup
 let run-dir (word sim-output-dir "/simple-param-analysis/" substring date-time-safe 11 (length date-time-safe) "-" belief-resolution)
 set contagion-dir (word run-dir "/" simple-spread-chance "/" brain-type "/" message-file "/" graph-type)
@@ -2488,6 +2488,42 @@ export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent
     </enumeratedValueSet>
     <enumeratedValueSet variable="message-file">
       <value value="&quot;default&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="graph-type">
+      <value value="&quot;erdos-renyi&quot;"/>
+      <value value="&quot;watts-strogatz&quot;"/>
+      <value value="&quot;barabasi-albert&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="complex-parameter-analysis" repetitions="100" runMetricsEveryStep="false">
+    <setup>setup
+let run-dir (word sim-output-dir "/complex-param-analysis/" substring date-time-safe 11 (length date-time-safe) "-" belief-resolution)
+set contagion-dir (word run-dir "/" complex-spread-ratio "/" brain-type "/" message-file "/" graph-type)
+py:run (word "if not os.path.isdir('" run-dir "'): os.mkdir('" run-dir "')")
+py:run (word "if not os.path.isdir('" run-dir "/" complex-spread-ratio "'): os.mkdir('" run-dir "/" complex-spread-ratio "')")
+py:run (word "if not os.path.isdir('" run-dir "/" complex-spread-ratio "/" brain-type "'): os.mkdir('" run-dir "/" complex-spread-ratio "/" brain-type "')")
+py:run (word "if not os.path.isdir('" run-dir "/" complex-spread-ratio "/" brain-type "/" message-file "'): os.mkdir('" run-dir "/" complex-spread-ratio "/" brain-type "/" message-file "')")
+py:run (word "if not os.path.isdir('" contagion-dir "'): os.mkdir('" contagion-dir "')")</setup>
+    <go>go</go>
+    <final>let rand random 10000
+export-world (word contagion-dir "/" rand "_world.csv")
+export-plot "percent-agent-beliefs" (word contagion-dir "/" rand "_percent-agent-beliefs_" complex-spread-ratio ".csv")</final>
+    <metric>count turtles</metric>
+    <steppedValueSet variable="complex-spread-ratio" first="0.05" step="0.05" last="0.95"/>
+    <enumeratedValueSet variable="belief-resolution">
+      <value value="7"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="brain-type">
+      <value value="&quot;discrete&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="N">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spread-type">
+      <value value="&quot;complex&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="message-file">
+      <value value="&quot;gradual&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="graph-type">
       <value value="&quot;erdos-renyi&quot;"/>
