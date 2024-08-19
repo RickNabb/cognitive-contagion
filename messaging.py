@@ -1,12 +1,15 @@
 import numpy as np
+import networkx as nx
 import math
 import json
-from data import *
 from random import *
 from copy import deepcopy
 import sys
-from enum import Enum
 import os
+from enums import INSTITUTION_MESSAGING_TYPES, messaging_file_names
+from enums import INSTITUTION_ECOSYSTEM_TYPES
+from enums import eco_file_names
+from utils import curr_sigmoid_p, curr_sigmoid_p_dynamic, sigmoid_contagion_p
 
 """
 MESSAGES
@@ -94,7 +97,6 @@ Create an agent brain model. Paramters are described below.
   message is received an its distance to the agent's brain is within beta, the
   agent will start to lean toward updating its belief by incrementing a token
   counter for the given direction of differing attributes.
-:param threshold: How many tokens an agent must stack up before they switch
   belief.
 :param alpha: The value for the agent's willingness to share a message - if a
   message is received and its distance to the agent's brain is within alpha, the
@@ -108,67 +110,43 @@ def create_agent_brain(
     malleable_initial,
     brain_type,
     beta=1.0,
-    threshold=5,
     alpha=1.0
     ):
     agent = {
         'ID': ID,
         'alpha': alpha,
         'beta': beta,
-        'malleable': list(map(lambda attr: attr.name, malleable_attributes)),
-        'prior': list(map(lambda attr: attr.name, prior_attributes)),
-        'tokens': {},
+        'malleable': malleable_attributes,
+        'prior': prior_attributes,
+        # 'malleable': list(map(lambda attr: attr.name, malleable_attributes)),
+        # 'prior': list(map(lambda attr: attr.name, prior_attributes)),
         'cont_tokens': {},
-        'update_threshold': threshold
     }
     # Initialize malleable beliefs w/ tokens for belief updates
     for i in range(0, len(malleable_attributes)):
       attr = malleable_attributes[i]
-      agent[attr.name] = malleable_initial[i]
+      # agent[attr.name] = malleable_initial[i]
+      agent[attr] = malleable_initial[i]
 
     # Initialize prior beliefs that cannot change - no tokens
     for i in range(0, len(prior_attributes)):
         attr = prior_attributes[i]
-        agent[attr.name] = prior_initial[i]
+        # agent[attr.name] = prior_initial[i]
+        agent[attr] = prior_initial[i]
 
     if brain_type == 'discrete':
       for i in range(0, len(malleable_attributes)):
         attr = malleable_attributes[i]
-        agent[attr.name] = malleable_initial[i]
+        # agent[attr.name] = malleable_initial[i]
+        agent[attr] = malleable_initial[i]
         # Initialize belief change counters
-        agent["tokens"][attr.name] = {}
-        for val in attrs_as_array(attr):
-          agent["tokens"][attr.name][val] = 0
     elif brain_type == 'continuous':
       for i in range(0, len(malleable_attributes)):
         attr = malleable_attributes[i]
-        agent['cont_tokens'][attr.name] = malleable_initial[i]
+        # agent['cont_tokens'][attr.name] = malleable_initial[i]
+        agent['cont_tokens'][attr] = malleable_initial[i]
 
     return agent
-
-"""
-Update an agent's belief tokens. This is the modeling of an agent starting
-to change their beliefs. If the token count reaches a certain threshold,
-the agent will change their appropriate belief to match the value that breached
-the threshold.
-
-:param agent: The agent to update belief tokens on.
-:param attrs: Attributes to update tokens for.
-"""
-def update_agent_tokens(agent, attrs):
-    for attr in attrs:
-        token = agent['tokens'][attr][attrs[attr]]
-
-        # If the update threshold is reached, update the agent belief
-        if token+1 >= agent['update_threshold']:
-            agent[attr] = attrs[attr]
-            #print('Updating agent belief on ' + str(attr.name) + ' to ' + str(attrs[attr]))
-
-            # Clear tokens
-            for tokens in agent['tokens'][attr]:
-                agent['tokens'][attr][tokens] = 0
-        else:
-            agent['tokens'][attr][attrs[attr]] += 1
 
 """
 Have an agent compare its beliefs to those in the message. The distance between
@@ -184,12 +162,12 @@ will update its beliefs.
 of spread to simulate.
 """
 def receive_message(agent, message, spread_type):
-    agent_beliefs = agent_beliefs_from_message(agent, message)
     dist = dist_to_agent_brain(agent, message)
 
     # Update agent belief tokens if the message is within updating threshold
     if dist <= agent['beta']:
       believe_message(agent, message, spread_type)
+
     return agent
 
 """
@@ -203,19 +181,14 @@ of spread to simulate.
 """
 def believe_message(agent, message, spread_type, brain_type):
   if brain_type == 'discrete':
-    # agent_beliefs = agent_beliefs_from_message(agent, message)
-    # # Update agent belief tokens if the message is within updating threshold
-    # if spread_type == "cognitive":
-    #   #print('updating belief tokens')
-    #   update_attrs = {}
-    #   for attr in message:
-    #       if message[attr] != agent_beliefs[attr] and attr in agent['tokens']:
-    #           update_attrs[attr] = message[attr]
-    #   update_agent_tokens(agent, update_attrs)
-    # # Just have the agent believe whatever it is
-    # elif spread_type == "simple" or spread_type == "complex":
+    agent_beliefs = agent_beliefs_from_message(agent, message)
+    agent_empty_beliefs = list(filter(lambda key: agent_beliefs[key] == -1, agent_beliefs))
     for m in message:
-      if m in agent['malleable']: agent[m] = message[m]
+      # We made a decision so that even if an agent doesn't believe
+      # the rest of the message, they adopt beliefs that they 
+      # didn't have
+      if m in agent['malleable'] or m in agent_empty_beliefs: agent[m] = message[m]
+
   elif brain_type == 'continuous':
     for attr in filter(lambda el: el in agent['malleable'], message):
       cont_attr = agent['cont_tokens'][attr]
@@ -258,8 +231,9 @@ parameters.
 """
 def dist_to_agent_brain(agent, message):
   agent_beliefs = agent_beliefs_from_message(agent, message)
+  agent_nonempty_beliefs = {key: val for (key, val) in agent_beliefs.items() if val != -1}
   m_arr = message_as_array(message)
-  a_arr = message_as_array(agent_beliefs)
+  a_arr = message_as_array(agent_nonempty_beliefs)
   return message_distance(m_arr, a_arr)
 
 """
@@ -280,7 +254,10 @@ def weighted_dist_to_agent_brain(agent, message, weight):
 def agent_beliefs_from_message(agent, message):
   agent_beliefs = {}
   for attr in message:
-    agent_beliefs[attr] = agent[attr]
+    if attr in agent:
+      agent_beliefs[attr] = agent[attr]
+    else:
+      agent_beliefs[attr] = -1
   return agent_beliefs
 
 def agent_belief_vec_from_message(agent, message):
@@ -288,7 +265,106 @@ def agent_belief_vec_from_message(agent, message):
     for attr in message:
         agent_beliefs.append(agent[attr])
     return np.array(agent_beliefs)
+
+def agent_trust_in_other_belief_func(agent_memory, agent_brain, topic_beliefs, bel_func):
+  '''
+  Return agent trust in another agent based off of a certain trust function
+  applied to the difference between their memory and their internal beliefs.
+
+  :param agent_memory: The agent's memory of the other agent's messages
+  for all belief propositions.
+  :param agent_brain: The agent's brain, including its internal beliefs.
+  :param topic_beliefs: The beliefs relevant to the topic trust is being
+  calculated for.
+  :param bel_func: The function used to calculate belief values between memory
+  and the agent's beliefs. This should be a function that takes one input so
+  it can be vectorized.
+  '''
+  # TODO: Make this more general than just 'A'
+  if bel_func == curr_sigmoid_p_dynamic:
+    bel_func = bel_func(agent_brain['A'])
+
+  bf_vectorized = np.vectorize(bel_func)
+  topic_memories = { bel: np.array(list(map(lambda el: int(el), mem))) for (bel, mem) in agent_memory.items() if bel in topic_beliefs }
+  topic_mem_diffs = { bel: bf_vectorized(abs(mem - agent_brain[bel])) for (bel,mem) in topic_memories.items() if len(mem) > 0 }
+  all_belief_vals = np.array([ val for val in topic_mem_diffs.values() ])
+  # print(f'trust between {agent_memory} and {agent_brain} is {all_belief_vals.mean()}')
+  return all_belief_vals.mean()
   
+def one_spread_iteration(G, agent, message, bel_fn):
+  # N = len(G.nodes)
+  adj = []
+  for i in G.nodes:
+    adj.append([ (i,j) in G.edges for j in G.nodes ])
+  adj = np.matrix(adj).astype(int)
+  # adj = nx.adjacency_matrix(G)
+  dists = np.array([ dist_to_agent_brain(G.nodes[i],message) for i in G.nodes ])
+  pf_vec = np.vectorize(bel_fn)
+  neighbors = adj[agent].toarray()
+  neighbors_bel = np.multiply(dists, neighbors)
+  ps = np.multiply(pf_vec(neighbors_bel),neighbors)
+  beliefs = (ps >= random()).astype(int)
+  return np.nonzero(beliefs)[1]
+
+def spread_from(G, agents, message, bel_fn, limit):
+  '''
+  Spread a message from a set of agents through the graph G, based on
+  belief function bel_fn. This stops once all the new agents probabilities
+  of believing (done in rounds) is below limit.
+
+  :param G: The graph of citizen agents.
+  :param agents: The initial set of agents to spread from.
+  :param message: The message to spread.
+  :param bel_fn: The belief function to use when an agent is presented with
+  a message.
+  :param limit: The probability to stop at once all new agents reached with
+  the message have p < limit.
+  '''
+  max_loops = 10
+  cur_loop = 0
+  N = len(G.nodes)
+  adj = []
+  for i in G.nodes:
+    adj.append([ (i,j) in G.edges for j in G.nodes ])
+  adj = np.matrix(adj).astype(int)
+  dists = np.array([ dist_to_agent_brain(G.nodes[i],message) for i in G.nodes ])
+  pf_vec = np.vectorize(bel_fn)
+  cont = True
+  curr_agents = np.array([ int(i in agents) for i in range(N) ])
+  heard_agents = np.zeros(N)
+  believed_agents = np.zeros(N)
+  heard_from = { n: [] for n in range(N) }
+  p = np.multiply(pf_vec(np.multiply(curr_agents,dists)),curr_agents)
+  while cont and cur_loop < max_loops:
+    heard_agents += curr_agents
+    heard_matrix = np.tile(heard_agents, (N,1))
+    adj_minus_heard = np.clip(adj - heard_matrix, 0, 1)
+
+    for agent in range(N):
+      if curr_agents[agent] == 1: 
+        for connection in range(N):
+          if adj_minus_heard[agent,connection] == 1:
+            heard_from[connection].append(agent)
+
+    rolls = np.multiply(curr_agents, np.random.rand(N))
+    successes = (np.multiply(p,curr_agents) > rolls).astype(int)
+    believed_agents += successes
+
+    new_agents = np.clip(successes * adj_minus_heard, 0, 1)[0]
+    new_agents = np.ravel(new_agents.sum(axis=0))
+    # Mask out the believers so only they propagate
+    propagation = np.multiply(p, successes) * adj_minus_heard
+    propagation = np.ravel(propagation.sum(axis=0))
+    new_agents_bel_p = np.multiply(pf_vec(np.multiply(new_agents,dists)),new_agents)
+    next_p = np.multiply(new_agents_bel_p,propagation)
+    p = p + next_p
+
+    new_p_over_limit = (next_p >= limit).astype(int)
+    curr_agents = new_agents
+    cont = new_p_over_limit.sum() > 0
+    cur_loop += 1
+  return {'heard': heard_agents, 'believed': believed_agents, 'heard_from': heard_from}
+
 '''
 Update an agent brain dictionary to change the value of agent[attr] to value.
 
@@ -299,6 +375,17 @@ Update an agent brain dictionary to change the value of agent[attr] to value.
 def update_agent_belief(agent, attr, value):
   agent[attr.name] = value
   return agent
+
+def topics_in_message(topics, message):
+  '''
+  Return topics contained in a message by set intersection
+
+  :param topics: a dictionary of topic -> belief proposition
+  :param message: a dictionary of belief proposition -> value
+  '''
+  message_beliefs = set(message.keys())
+  topics = { key: set(val) for key,val in topics.items() }
+  return [ key for key,val in topics.items() if len(val.intersection(message_beliefs)) > 0 ]
     
 """
 AGENT GENERAL FUNCTIONS
@@ -317,35 +404,23 @@ Read message data over time for given media agent IDs.
 :param path: The path to the file to read.
 '''
 def read_message_over_time_data(path):
-    f = open(path, 'r')
-    raw = f.read()
-    data = json.loads(raw)
-    messages = {}
-    last_valid_t = -1
-    for t in range(data['start'], data['stop']):
-        if str(t) in data:
-            last_valid_t = str(t)
-        if last_valid_t != -1:
-          messages[t] = data[last_valid_t]
-    f.close()
-    return messages
+  data = json.load(open(path, 'r'))
+  converted_messages = {}
+  for tick, messages in data.items():
+    if tick != 'start' and tick != 'stop':
+      converted_messages[int(tick)] = messages
+  return converted_messages
 
 '''
 UTILITY FUNCTIONS
 '''
 
-class INSTITUTION_MESSAGING_TYPES(Enum):
-  DEFAULT = 0
-  SPLIT = 1
-  GRADUAL = 2
+def generate_all_messaging_patterns(start, stop, resolution, bel, out_path):
+  for m_type in INSTITUTION_MESSAGING_TYPES:
+    for eco_type in INSTITUTION_ECOSYSTEM_TYPES:
+      generate_messaging_patterns(start, stop, m_type, eco_type, resolution, bel, out_path)
 
-file_names = {
-  INSTITUTION_MESSAGING_TYPES.DEFAULT: 'default',
-  INSTITUTION_MESSAGING_TYPES.SPLIT: '50-50',
-  INSTITUTION_MESSAGING_TYPES.GRADUAL: 'gradual',
-}
-
-def generate_messaging_patterns(start, stop, m_type, resolution, bel, out_path):
+def generate_messaging_patterns(start, stop, m_type, eco_type, resolution, bel, out_path):
   '''
   Create JSON files for messaging patterns to be used by instituional agents
   for experiments.
@@ -355,6 +430,7 @@ def generate_messaging_patterns(start, stop, m_type, resolution, bel, out_path):
   :param start: Integer start timestep value for the simulation
   :param stop: Integer end timestep value for the simulation
   :param m_type: INSTITUTIONAL_MESSAGING_TYPES value for a pattern to use
+  :param eco_type: INSTITUTIONAL_ECOSYSTEM_TYPES value for a pattern to use
   :param resolution: Integer belief resolution (must be >= stop)
   :param bel: String belief key to make messages for
   :param out_path: String path to make messaging files in
@@ -362,27 +438,80 @@ def generate_messaging_patterns(start, stop, m_type, resolution, bel, out_path):
 
   if not os.path.isdir(f'{out_path}/{resolution}'):
     os.mkdir(f'{out_path}/{resolution}')
+  if not os.path.isdir(f'{out_path}/{resolution}/{eco_file_names[eco_type]}'):
+    os.mkdir(f'{out_path}/{resolution}/{eco_file_names[eco_type]}')
 
-  f = open(f'{out_path}/{resolution}/{file_names[m_type]}.json', 'w')
+  f = open(f'{out_path}/{resolution}/{eco_file_names[eco_type]}/{messaging_file_names[m_type]}.json', 'w')
   
   pattern_obj = { 'start': start, 'stop': stop }
-  if m_type == INSTITUTION_MESSAGING_TYPES.DEFAULT:
-    pattern_obj[f'{start}'] = {
-      'BEL': [ { f'{bel}': resolution-1 } ]
-    }
-  elif m_type == INSTITUTION_MESSAGING_TYPES.SPLIT:
-    pattern_obj[f'{start}'] = {
-      'BEL': [ { f'{bel}': resolution-1 } ]
-    }
-    pattern_obj[f'{round(stop/2)}'] = {
-      'BEL': [ { f'{bel}': 0 } ]
-    }
+  if m_type == INSTITUTION_MESSAGING_TYPES.DEFAULT or m_type == INSTITUTION_MESSAGING_TYPES.SPLIT:
+    pattern_obj[f'{start}'] = {}
+    if eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MAX:
+      pattern_obj[f'{start}']['MAX'] = [ { f'{bel}': resolution-1 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MIN:
+      pattern_obj[f'{start}']['MIN'] = [ { f'{bel}': 0 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MID:
+      pattern_obj[f'{start}']['MID'] = [ { f'{bel}': math.floor(resolution/2) } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.TWO_POLARIZED:
+      pattern_obj[f'{start}']['MAX'] = [ { f'{bel}': resolution-1 } ]
+      pattern_obj[f'{start}']['MIN'] = [ { f'{bel}': 0 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.TWO_MID:
+      pattern_obj[f'{start}']['LOWER'] = [ { f'{bel}': math.floor(resolution/4) } ]
+      pattern_obj[f'{start}']['UPPER'] = [ { f'{bel}': 3*math.floor(resolution/4) } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.THREE_POLARIZED:
+      pattern_obj[f'{start}']['MIN'] = [ { f'{bel}': 0 } ]
+      pattern_obj[f'{start}']['MID'] = [ { f'{bel}': math.floor(resolution/2) } ]
+      pattern_obj[f'{start}']['MAX'] = [ { f'{bel}': resolution-1 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.THREE_MID:
+      pattern_obj[f'{start}']['MIN'] = [ { f'{bel}': math.floor(resolution/6) } ]
+      pattern_obj[f'{start}']['MID'] = [ { f'{bel}': math.floor(resolution/2) } ]
+      pattern_obj[f'{start}']['MAX'] = [ { f'{bel}': 5*math.floor(resolution/6) } ]
+  if m_type == INSTITUTION_MESSAGING_TYPES.SPLIT:
+    pattern_obj[f'{round(stop/2)}'] = {}
+    if eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MAX:
+      pattern_obj[f'{round(stop/2)}']['MAX'] = [ { f'{bel}': 0 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MIN:
+      pattern_obj[f'{round(stop/2)}']['MIN'] = [ { f'{bel}': resolution-1 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MID:
+      pattern_obj[f'{round(stop/2)}']['MID'] = [ { f'{bel}': math.floor(resolution/2) } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.TWO_POLARIZED:
+      pattern_obj[f'{round(stop/2)}']['MIN'] = [ { f'{bel}': resolution-1 } ]
+      pattern_obj[f'{round(stop/2)}']['MAX'] = [ { f'{bel}': 0 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.TWO_MID:
+      pattern_obj[f'{round(stop/2)}']['UPPER'] = [ { f'{bel}': math.floor(resolution/4) } ]
+      pattern_obj[f'{round(stop/2)}']['LOWER'] = [ { f'{bel}': 3*math.floor(resolution/4) } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.THREE_POLARIZED:
+      pattern_obj[f'{round(stop/2)}']['MAX'] = [ { f'{bel}': 0 } ]
+      pattern_obj[f'{round(stop/2)}']['MID'] = [ { f'{bel}': math.floor(resolution/2) } ]
+      pattern_obj[f'{round(stop/2)}']['MIN'] = [ { f'{bel}': resolution-1 } ]
+    elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.THREE_MID:
+      pattern_obj[f'{round(stop/2)}']['MAX'] = [ { f'{bel}': math.floor(resolution/6) } ]
+      pattern_obj[f'{round(stop/2)}']['MID'] = [ { f'{bel}': math.floor(resolution/2) } ]
+      pattern_obj[f'{round(stop/2)}']['MIN'] = [ { f'{bel}': 5*math.floor(resolution/6) } ]
   elif m_type == INSTITUTION_MESSAGING_TYPES.GRADUAL:
     buckets = 6
     step = math.floor(60 / buckets)
     for t in range(start, 61, step):
-      pattern_obj[f'{t}'] = {
-        'BEL': [ { f'{bel}': (resolution-1) - math.floor(((resolution-1) / buckets) * (t / step)) } ]
-      }
+      pattern_obj[f'{t}'] = {}
+      if eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MAX:
+        pattern_obj[f'{t}']['MAX'] = [ { f'{bel}': (resolution-1) - math.floor(((resolution-1) / buckets) * (t / step)) } ]
+      elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MIN:
+        pattern_obj[f'{t}']['MIN'] = [ { f'{bel}': math.floor(((resolution-1) / buckets) * (t / step)) } ]
+      elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.ONE_MID:
+        pattern_obj[f'{t}']['MID'] = [ { f'{bel}': 3*math.floor((resolution-1)/4) - math.floor((2*((resolution-1)/4) / buckets) * (t / step)) } ]
+      elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.TWO_POLARIZED:
+        pattern_obj[f'{t}']['MIN'] = [ { f'{bel}': math.floor(((resolution-1) / buckets) * (t / step)) } ]
+        pattern_obj[f'{t}']['MAX'] = [ { f'{bel}': (resolution-1) - math.floor(((resolution-1) / buckets) * (t / step)) } ]
+      elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.TWO_MID:
+        pattern_obj[f'{t}']['UPPER'] = [ { f'{bel}': 3*math.floor((resolution-1)/4) - math.floor((2*((resolution-1)/4) / buckets) * (t / step)) } ]
+        pattern_obj[f'{t}']['LOWER'] = [ { f'{bel}': math.floor((resolution-1)/4) + math.floor((2*((resolution-1)/4) / buckets) * (t / step)) } ]
+      elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.THREE_POLARIZED:
+        pattern_obj[f'{t}']['MIN'] = [ { f'{bel}': math.floor(((resolution-1) / buckets) * (t / step)) } ]
+        pattern_obj[f'{t}']['MAX'] = [ { f'{bel}': (resolution-1) - math.floor(((resolution-1) / buckets) * (t / step)) } ]
+        pattern_obj[f'{t}']['MID'] = [ { f'{bel}': 3*math.floor((resolution-1)/4) - math.floor((2*((resolution-1)/4) / buckets) * (t / step)) } ]
+      elif eco_type == INSTITUTION_ECOSYSTEM_TYPES.THREE_MID:
+        pattern_obj[f'{t}']['UPPER'] = [ { f'{bel}': 5*math.floor((resolution-1)/6) - math.floor((4*((resolution-1)/6) / buckets) * (t / step)) } ]
+        pattern_obj[f'{t}']['LOWER'] = [ { f'{bel}': math.floor((resolution-1)/6) + math.floor((4*((resolution-1)/6) / buckets) * (t / step)) } ]
+        pattern_obj[f'{t}']['MID'] = [ { f'{bel}': 3*math.floor((resolution-1)/4) - math.floor((2*((resolution-1)/4) / buckets) * (t / step)) } ]
   f.write(json.dumps(pattern_obj))
   f.close()

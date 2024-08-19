@@ -1,6 +1,4 @@
 import numpy as np
-from data import *
-from stats import *
 import networkx as nx
 
 def mag(n, L, Thetas):
